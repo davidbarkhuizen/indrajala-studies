@@ -989,6 +989,7 @@ def prepare(host: Host, commit: str, repo: Path, scratch: Path) -> list[list[str
                 f"git -C {sub} fetch -q origin && git -C {sub} branch -f batch-pin $(git -C {here} rev-parse {commit}:ml)",
             ],
             ["git", "-C", str(repo / "ml"), "bundle", "create", "-q", str(bundles[1]), "batch-pin"],
+            ["ssh", host.name, "mkdir -p ~/labour/bundles"],
             ["scp", "-q", str(bundles[0]), f"{host.name}:labour/bundles/batch.bundle"],
             ["scp", "-q", str(bundles[1]), f"{host.name}:labour/bundles/batch-ml.bundle"],
             [

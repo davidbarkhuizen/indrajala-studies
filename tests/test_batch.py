@@ -369,8 +369,9 @@ def test_the_fleets_commands_follow_each_hosts_rules():
     assert f"PYTHONPATH=/home/david/code/{b.CRATE}:/home/david/code/wt-studies:/home/david/code/wt-studies/ml " in klip
     steps = b.prepare(b.HOSTS["stone"], "abc123", Path("/repo"), Path("/tmp"))
     assert steps[1][3:5] == ["bundle", "create"] and steps[3][3:5] == ["bundle", "create"]
-    assert "rev-parse abc123:ml" in steps[2][2] and "--no-recurse-submodules" in steps[6][2]
-    assert "cd ~/labour/code/indrajala-studies" in steps[6][2] and "submodule update" in steps[6][2]
+    assert steps[4] == ["ssh", "stone", "mkdir -p ~/labour/bundles"]
+    assert "rev-parse abc123:ml" in steps[2][2] and "--no-recurse-submodules" in steps[7][2]
+    assert "cd ~/labour/code/indrajala-studies" in steps[7][2] and "submodule update" in steps[7][2]
     (klip_step,) = b.prepare(b.HOSTS["klip"], "abc123", Path("/repo"), Path("/tmp"))
     assert klip_step[2].startswith("cd ~/code/indrajala-ml && git fetch -q origin")
     assert (
