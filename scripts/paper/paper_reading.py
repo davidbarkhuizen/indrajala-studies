@@ -1,7 +1,7 @@
 """
 A runner batch's reading tools (the paper workplan's D15 and D16 rules, as T1's `read.sh` did by
 hand for one task): every certified network of a batch's attempts, its task, arm and vocabulary from
-its backdrop (`indrajala_ml.batch.BACKDROPS`, by the attempt's name `<backdrop>-<seed>`).
+its backdrop (`indrajala_studies.batch.BACKDROPS`, by the attempt's name `<backdrop>-<seed>`).
 
 - `plan DATA`: each certified network and the arguments it is read with.
 - `links DATA`: DATA/runs/<backdrop>/seed<s>, each a link to the run's log directory, as `readout`
@@ -30,8 +30,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from indrajala_ml.batch import BACKDROPS, CELLS, Backdrop
-from indrajala_ml.studies import modular_family as mf
+from indrajala_studies import modular_family as mf
+from indrajala_studies.batch import BACKDROPS, CELLS, Backdrop
 
 # the batch runner's probe, which stays in ml (the studies-repo workplan)
 PROBE = Path(__file__).resolve().parents[2] / "ml" / "scripts" / "studies" / "modular_family_probe.py"

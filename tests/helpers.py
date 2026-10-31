@@ -1,103 +1,123 @@
 """
-The test doubles these tests share with ml's, copied (the studies-repo workplan, D5) from ml at
-ba5fa14: CarryMachine and TaskMachine from tests/studies/test_window_recurrent_certificate.py.
+What the study tests share: ml's tests/studies/helpers.py (the carry machine as a test double, the
+smallest study settings a real network's run takes), moved with them; and, copied from ml's tests
+at d126315 (the studies-repo workplan's D5), `bits` (tests/helpers.py) and the window program's
+helpers and preset networks (tests/model/networks/test_window_program_network.py).
 """
 
-import math
+from typing import Any, cast
 
 import numpy as np
-from indrajala_ml.studies import window_recurrent_certificate as wc
-from indrajala_ml.studies import window_tasks as wt
+from indrajala_ml.model.layers.array.array_backend import RUST
+from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork, per_layer_path
+from indrajala_ml.model.specs import window_presets as wp
+from indrajala_ml.model.specs.update_rules import Adam
+from indrajala_ml.model.specs.window_recurrence import OUTPUT, AttentionPooling, Codes, Factor, WindowRecurrence
 
-ALL_TWOS = 26  # the column token of digits (2, 2, 2): column sum 6
-NEAR = 1.01  # a distance ratio inside SNAP_RATIO
+from indrajala_studies import window_recurrent_certificate as wc
+from indrajala_studies import window_recurrent_study as wr
+from indrajala_studies import window_tasks as wt
+
+ADDITION = wt.ADDITION
+
+# a real network's run in seconds: one epoch of 64 examples a step, two steps, the tests' smallest
+# reads; a test changes what it needs with dataclasses.replace
+TINY = wr.Settings(
+    epoch_examples=64,
+    max_epochs=1,
+    patience=1,
+    screen=20,
+    steps=2,
+    test_lengths=(3,),
+    sampled=50,
+    relation_sampled=10,
+    per_stratum=5,
+    codes_cases=20,
+    seeds=1,
+)
 
 
-class CarryMachine:
-    """
-    A stand-in transducer: code q holds the carry q % 3, copies codes a carry (q = carry + 3 *
-    copy, the copy the window's last token's parity), each window's digits the sum's and its next
-    code its carry out's, every other code twice as far as the one it snaps to. Its faults:
-    "drops" hands a carry out of 2 on as 1; "inside" hands on no carry (it carries only inside a
-    window); "snap-tie" puts the code of the next carry, "copy-tie" the carry's other copy, at
-    NEAR after an all-twos window; "digit-tie" gives an all-twos window's digits a lead of 1e-9.
-    """
+class CarryTable:
+    """The carry machine at k 1 as a WindowMachine, with flip (state, window) handing on the next carry instead."""
 
-    def __init__(self, k: int, copies: int = 1, fault: str | None = None) -> None:
-        self.columns = k
-        self.copies = copies
-        self.fault = fault
-        self.count = 3 * copies
+    def __init__(self, flip: tuple[int, int] | None = None) -> None:
+        self.flip = flip
+
+    @property
+    def columns(self) -> int:
+        return 1
 
     @property
     def codes(self) -> list[int]:
-        return [self.count]
+        return [3]
 
-    def start(self) -> tuple[wc.State, list[np.ndarray]]:
-        return (0,), [self._distances(np.zeros(1, dtype=np.int64))[0]]
+    def start(self) -> tuple[tuple[int, ...], list[np.ndarray]]:
+        return (0,), [np.array([0.0, 1.0, 1.0])]
 
-    def _distances(self, codes: np.ndarray) -> np.ndarray:
-        distances = np.full((len(codes), self.count), 2.0)
-        distances[np.arange(len(codes)), codes] = 1.0
-        return distances
-
-    def step(self, state: wc.State, windows: np.ndarray) -> wc.Steps:
-        (code,) = state
-        want_digits, want_carry = wt.ADDITION.machine.windows(windows)
-        digits, carry = want_digits[code % 3], want_carry[code % 3].copy()
-        if self.fault == "drops":
-            carry[carry == 2] = 1
-        if self.fault == "inside":
-            carry[:] = 0
-        codes = carry + 3 * (windows[:, -1] % self.copies)
-        distances = self._distances(codes)
-        twos = (windows == ALL_TWOS).all(axis=1)
-        if self.fault == "snap-tie":
-            distances[twos, (carry[twos] + 1) % 3 + 3 * (windows[twos, -1] % self.copies)] = NEAR
-        if self.fault == "copy-tie":
-            distances[twos, carry[twos] + 3 * ((windows[twos, -1] + 1) % self.copies)] = NEAR
-        leads = np.full(digits.shape, 5.0)
-        if self.fault == "digit-tie":
-            leads[twos] = 1e-9
-        return wc.Steps(digits, leads, codes[:, np.newaxis], [distances])
+    def step(self, state: tuple[int, ...], windows: np.ndarray) -> wc.Steps:
+        (carry,) = state
+        labels, after = ADDITION.machine.windows(windows)
+        digits, nexts = labels[carry], after[carry].copy()
+        if self.flip is not None and self.flip[0] == carry:
+            nexts[windows[:, 0] == self.flip[1]] = (nexts[windows[:, 0] == self.flip[1]] + 1) % 3
+        distances = np.ones((len(windows), 3))
+        distances[np.arange(len(windows)), nexts] = 0.0
+        return wc.Steps(digits, np.full(digits.shape, 5.0), nexts[:, np.newaxis], [distances])
 
 
-class TaskMachine:
+def bits(value: Any) -> Any:
     """
-    A stand-in transducer for any task: code q holds the target state q % S (S the target's
-    states), copies of each (q = state + S * copy, the copy the window's last token's parity), each
-    window's labels and next code the target's. Its faults: "inside" hands on the start state (it
-    keeps nothing across windows); "forgets-b", for modular division, hands on B as 0.
+    Every float in value as float.hex, through either backend's arrays, lists, tuples and dicts:
+    two values' bits are equal exactly when their floats are, bit for bit (0.0 and -0.0 differ,
+    NaNs match), and pytest shows a readable diff. Tuples become lists and dict keys strings, as in
+    a JSON file of bits (tests/saved_model_fixtures.py's).
     """
+    to_list = getattr(value, "tolist", None)
+    if to_list is not None:
+        return bits(to_list())
+    if isinstance(value, list | tuple):
+        return [bits(item) for item in cast("list[Any] | tuple[Any, ...]", value)]
+    if isinstance(value, dict):
+        return {str(key): bits(item) for key, item in cast("dict[Any, Any]", value).items()}
+    if isinstance(value, float):
+        return value.hex()
+    return value
 
-    def __init__(self, task: wt.Task, k: int, copies: int = 1, fault: str | None = None) -> None:
-        self.task, self.columns, self.copies, self.fault = task, k, copies, fault
-        self.states = task.machine.states
-        self.count = self.states * copies
 
-    @property
-    def codes(self) -> list[int]:
-        return [self.count]
+# the studies' cells from the library's presets: the window-recurrent adder's 27 column tokens and 3
+# digits; the division family at p 7, the sum and difference queried (11 tokens, 3 a column, 8 classes)
+PRESETS = {"transformer": wp.transformer_window, "linear": wp.linear_window, "ffn": wp.ffn_window}
+FAMILY_TOKENS, FAMILY_WIDTH = 11, 3
 
-    def start(self) -> tuple[wc.State, list[np.ndarray]]:
-        return (0,), [self._distances(np.zeros(1, dtype=np.int64))[0]]
 
-    def _distances(self, codes: np.ndarray) -> np.ndarray:
-        distances = np.full((len(codes), self.count), 2.0)
-        distances[np.arange(len(codes)), codes] = 1.0
-        return distances
+def adder(window: str, k: int, s: int, m: int, seed: int) -> Any:
+    recurrence = WindowRecurrence((Factor(s, Codes(m)),))
+    return WindowRecurrentRustArrayNetwork.randomized((k,), PRESETS[window](27, 3), recurrence, Adam(), seed=seed)
 
-    def step(self, state: wc.State, windows: np.ndarray) -> wc.Steps:
-        (code,) = state
-        labels, after = self.task.machine.windows(windows)
-        target = code % self.states
-        following = after[target].copy()
-        if self.fault == "inside":
-            following[:] = self.task.machine.start
-        if self.fault == "forgets-b":
-            p = math.isqrt(self.states)
-            following = following // p * p
-        codes = following + self.states * (windows[:, -1] % self.copies)
-        return wc.Steps(
-            labels[target], np.full(labels[target].shape, 5.0), codes[:, np.newaxis], [self._distances(codes)]
-        )
+
+def family(seed: int) -> Any:
+    recurrence = WindowRecurrence((Factor(16, Codes(32)),) * 2, False, pooling=AttentionPooling(OUTPUT))
+    specs = wp.transformer_window(FAMILY_TOKENS, 8)
+    return WindowRecurrentRustArrayNetwork.randomized((FAMILY_WIDTH,), specs, recurrence, Adam(), seed=seed)
+
+
+def program_passes(network: Any, X: Any) -> dict[str, Any]:
+    # every inference pass's results, as bits and codes
+    outputs, states, cells = network.window_states(X)
+    result: dict[str, Any] = {
+        "forward_windows": bits(network.forward_windows(X)),
+        "window_states": [bits(outputs), [bits(s) for s in states], [bits(c) for c in cells]],
+    }
+    if network.recurrence.snapped:
+        # a machine's: every factor snapped
+        result["state_codes"] = network.state_codes(X)
+        output, cell, codes = network.window_step(RUST.columns(X, 0, network.columns), network._first_state(X.shape[0]))
+        result["window_step"] = [bits(output), bits(cell), codes]
+    return result
+
+
+def assert_program_is_per_layer(network: Any, X: Any) -> None:
+    program = program_passes(network, X)
+    with per_layer_path(network):
+        per_layer = program_passes(network, X)
+    assert program == per_layer

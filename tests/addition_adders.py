@@ -1,12 +1,11 @@
 """
 Stand-in adders for the addition catalogue's tests and the study harness's: one correct, and each
-broken one wrong in a known way, so the properties it must fail are known. Copied from ml at
-ba5fa14 (tests/data/addition_adders.py; the studies-repo workplan, D5).
+broken one wrong in a known way, so the properties it must fail are known.
 """
 
 from collections.abc import Sequence
 
-from indrajala_ml.data.addition_data import BASE, Adder, Triple, column_sums, from_digits
+from indrajala_studies.addition_data import BASE, Adder, Triple, column_sums, from_digits
 
 
 def correct(triples: Sequence[Triple]) -> list[int]:

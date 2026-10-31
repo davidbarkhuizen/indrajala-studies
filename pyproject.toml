@@ -27,5 +27,5 @@ extend-exclude = ["ml"]  # ml's own repo (submodule)
 [tool.pyright]
 include = ["indrajala_studies", "tests", "scripts"]
 typeCheckingMode = "strict"
-extraPaths = ["ml"]
-executionEnvironments = [{ root = "tests", extraPaths = [".", "ml", "scripts/studies", "scripts/paper", "scripts/data"], reportPrivateUsage = false }]
+extraPaths = ["ml", "ml/scripts/measurement"]  # and window_recurrent_timing.py, which window_study_timing.py imports from ml
+executionEnvironments = [{ root = "tests", extraPaths = [".", "ml", "scripts/studies", "scripts/paper", "scripts/data", "scripts/runner", "scripts/measurement", "ml/scripts/measurement"], reportPrivateUsage = false }]

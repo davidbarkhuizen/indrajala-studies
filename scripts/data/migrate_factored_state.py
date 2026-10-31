@@ -54,8 +54,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from indrajala_ml.studies import window_recurrent_certificate as wc
-from indrajala_ml.studies import window_tasks as wt
+from indrajala_studies import window_recurrent_certificate as wc
+from indrajala_studies import window_tasks as wt
 
 BEFORE = ".before-factored-state"
 

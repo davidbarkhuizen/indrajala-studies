@@ -16,7 +16,8 @@ import numpy as np
 from indrajala_ml.model.layers.array.array_backend import RUST
 from indrajala_ml.model.networks.window_recurrent_array_network import per_layer_path
 from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.studies.window_recurrent_study import CHUNK_TOKENS
+
+from indrajala_studies.window_recurrent_study import CHUNK_TOKENS
 
 
 def check(path: str, n: int, rows: int, seed: int) -> tuple[bool, str]:

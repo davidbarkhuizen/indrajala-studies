@@ -1,0 +1,12 @@
+{
+ "directory": "data/window-recurrent/e2b-prime",
+ "workers": 6,
+ "tests_past_break": false,
+ "seeds": 20,
+ "steps": 18,
+ "certify_steps": true,
+ "end_at_certified_step": false,
+ "matrix": [
+  {"arm": "curriculum", "window": "linear", "k": [1], "s": [16], "m": [16]}
+ ]
+}

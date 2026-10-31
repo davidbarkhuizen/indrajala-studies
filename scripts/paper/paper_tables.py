@@ -33,12 +33,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from indrajala_ml.batch import BACKDROPS
-from indrajala_ml.data import addition_data as ad
-from indrajala_ml.studies import inference
-from indrajala_ml.studies import modular_family as mf
-from indrajala_ml.studies import window_recurrent_study as wr
-from indrajala_ml.studies import window_tasks as wt
+from indrajala_studies import addition_data as ad
+from indrajala_studies import inference
+from indrajala_studies import modular_family as mf
+from indrajala_studies import window_recurrent_study as wr
+from indrajala_studies import window_tasks as wt
+from indrajala_studies.batch import BACKDROPS
 
 Table = Callable[[Path], list[str]]
 

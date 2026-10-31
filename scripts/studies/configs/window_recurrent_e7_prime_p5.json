@@ -1,0 +1,11 @@
+{
+ "directory": "data/window-recurrent/e7-prime-p5",
+ "workers": 6,
+ "task": "modular-division-5",
+ "tests_past_break": false,
+ "seeds": 10,
+ "matrix": [
+  {"arm": "curriculum", "k": [1], "s": [16], "m": [128, 256]},
+  {"arm": "all-at-once", "k": [1], "s": [16], "m": [128, 256]}
+ ]
+}

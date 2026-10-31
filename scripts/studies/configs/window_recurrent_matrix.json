@@ -1,0 +1,6 @@
+{
+ "directory": "data/window-recurrent/matrix",
+ "workers": 6,
+ "tests_past_break": false,
+ "matrix": [{"k": [1, 2, 4], "s": [4, 16], "m": [4, 8, 16]}]
+}

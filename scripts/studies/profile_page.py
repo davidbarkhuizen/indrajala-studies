@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from indrajala_ml.studies import modular_family as mf
+
+from indrajala_studies import modular_family as mf
 
 
 def course(rows: list[dict[str, Any]]) -> dict[str, Any]:

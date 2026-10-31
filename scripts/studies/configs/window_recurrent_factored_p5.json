@@ -1,0 +1,13 @@
+{
+ "directory": "data/window-recurrent/factored-p5",
+ "workers": 6,
+ "task": "modular-division-5",
+ "tests_past_break": false,
+ "seeds": 6,
+ "steps": 88,
+ "certify_steps": true,
+ "stop_at_certified": true,
+ "matrix": [
+  {"arm": "curriculum", "k": [1], "factors": [[16, 8], [16, 8]], "reads": "before_state"}
+ ]
+}
