@@ -1,0 +1,566 @@
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one column; controls above, phase strip, then panels sharing the epoch axis (or one overlay chart). */
+:root {
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --band-a: rgba(82,81,78,0.07); --band-b: rgba(82,81,78,0.00); --cross: #52514e; --good: #006300;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --band-a: rgba(240,239,236,0.06); --band-b: rgba(240,239,236,0.00); --cross: #c3c2b7; --good: #0ca30c;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --band-a: rgba(240,239,236,0.06); --band-b: rgba(240,239,236,0.00); --cross: #c3c2b7; --good: #0ca30c;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; color-scheme: dark }
+body { background: var(--page); color: var(--ink); font-family: var(--sans); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 14px; }
+h1 { font-size: 1.35rem; margin: 0; font-weight: 650; text-wrap: balance; }
+.sub { color: var(--ink-2); margin: 0; max-width: 70ch; line-height: 1.45; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.controls label { font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+select, button { font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--ring); border-radius: 6px; padding: 5px 9px; }
+button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+.seg { display: inline-flex; gap: 4px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 10px 6px 6px; min-width: 0; }
+.reading { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); line-height: 1.5; margin: 0; white-space: pre-wrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.82rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
+svg { display: block; width: 100%; overflow: visible; }
+svg text { fill: var(--muted); font-size: 10.5px; font-family: var(--sans); font-variant-numeric: tabular-nums; }
+svg .title { fill: var(--ink-2); font-size: 11.5px; font-weight: 600; }
+svg .direct { font-size: 11px; font-weight: 600; fill: var(--ink-2); }
+svg .phase { fill: var(--ink-2); font-size: 10.5px; }
+.tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--ring);
+  border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 5; max-width: 320px; }
+.tip table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tip td { padding: 1px 6px 1px 0; } .tip td:not(:first-child) { text-align: right; }
+.tip .h { color: var(--ink-2); margin-bottom: 4px; font-weight: 600; }
+details { font-size: 0.85rem; color: var(--ink-2); }
+.tablewrap { overflow-x: auto; max-height: 360px; overflow-y: auto; margin-top: 8px; }
+.tablewrap table { border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 0.78rem; }
+.tablewrap th, .tablewrap td { padding: 2px 8px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.note { font-size: 0.8rem; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <h1>__TITLE__</h1>
+  <p class="sub">Each run's epochs from its log, over the epochs trained: the warm-up, then the profile's heat, hold and cool until the codes are hard. Hover any panel to read every quantity at that epoch.</p>
+  <div class="controls">
+    <label for="run">Run <select id="run"></select></label>
+    <label>View <span class="seg"><button id="v-stacked" aria-pressed="true">Stacked</button><button id="v-overlay" aria-pressed="false">Overlay</button><button id="v-phase" aria-pressed="false">Phase diagram</button><button id="v-heat" aria-pressed="false">Heat curves</button><button id="v-splits" aria-pressed="false">Splits</button><button id="v-order" aria-pressed="false">Order</button><button id="v-steps" aria-pressed="false">Step rule</button><button id="v-machine" aria-pressed="false">Machine size</button></span></label>
+    <label for="factor" id="factor-wrap" hidden>Factor <select id="factor"></select></label>
+  </div>
+  <p class="reading" id="reading"></p>
+  <div class="legend" id="legend"></div>
+  <div class="card" id="chart"></div>
+  <p class="note" id="note"></p>
+  <details id="table-details"><summary>Data table</summary><div class="tablewrap" id="table"></div></details>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const DATA = __DATA__;
+const COLORS = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6'];
+const PANELS = [
+  { key: 'T', title: 'Temperature T', log: true },
+  { key: 'C', title: 'Heat capacity C = d⟨D⟩/dT', log: true },
+  { key: 'E', title: 'Energy ⟨D⟩ (soft assignment distortion)', log: false },
+  { key: 'G', title: "Codes' groups", log: false, steps: true },
+  { key: 'L', title: 'Coupling l (0 the cell, 1 the code)', log: false, domain: [0, 1] },
+  { key: 'screen', title: 'Screen (answers right) · state share at each step end', log: false, domain: [0, 1], single: true },
+];
+const OVERLAY = [
+  { key: 'T', name: 'T', log: true }, { key: 'C', name: 'capacity', log: true }, { key: 'E', name: 'energy' },
+  { key: 'G', name: 'groups' }, { key: 'L', name: 'coupling' }, { key: 'screen', name: 'screen', single: true },
+];
+const state = { run: 0, view: 'stacked', factor: 0, hover: null };
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function fmt(v) {
+  if (v === null || v === undefined) return '–';
+  if (typeof v !== 'number' || Number.isInteger(v)) return String(v);
+  const a = Math.abs(v);
+  if (a !== 0 && (a < 1e-3 || a >= 1e4)) return v.toExponential(2);
+  return a >= 100 ? v.toFixed(0) : a >= 1 ? v.toFixed(3) : v.toPrecision(3);
+}
+function series(run, key, g) { return key === 'screen' ? run.columns.screen : run.columns[key][g]; }
+function extent(values, log) {
+  let lo = Infinity, hi = -Infinity;
+  for (const v of values) { if (v === null || (log && v <= 0)) continue; const w = log ? Math.log10(v) : v; if (w < lo) lo = w; if (w > hi) hi = w; }
+  if (!isFinite(lo)) return null;
+  if (hi === lo) { lo -= 0.5; hi += 0.5; }
+  return [lo, hi];
+}
+function niceTicks(lo, hi, n) {
+  const span = hi - lo, step0 = Math.pow(10, Math.floor(Math.log10(span / n)));
+  const step = [1, 2, 5, 10].map((m) => m * step0).find((s) => span / s <= n) || step0 * 10;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function phaseRuns(run) {
+  const c = run.columns, out = [];
+  for (let i = 0; i < c.x.length; i++) {
+    const p = c.phase[i];
+    if (out.length && out[out.length - 1].phase === p) out[out.length - 1].to = c.x[i];
+    else out.push({ phase: p, from: c.x[i] - 1, to: c.x[i] });
+  }
+  return out;
+}
+function nearest(run, xv) {
+  const xs = run.columns.x; let lo = 0, hi = xs.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (xs[mid] < xv) lo = mid + 1; else hi = mid; }
+  return lo > 0 && Math.abs(xs[lo - 1] - xv) < Math.abs(xs[lo] - xv) ? lo - 1 : lo;
+}
+
+let crosshairs = [];
+function frame(svg, W, H, M, run, sx, showPhases) {
+  const bands = phaseRuns(run);
+  bands.forEach((b, i) => {
+    el('rect', { x: sx(b.from), y: M.t, width: Math.max(0, sx(b.to) - sx(b.from)), height: H - M.t - M.b, fill: i % 2 ? css('--band-b') : css('--band-a') }, svg);
+    if (showPhases && sx(b.to) - sx(b.from) > 34) {
+      const t = el('text', { x: sx(b.from) + 4, y: M.t - 4, class: 'phase' }, svg); t.textContent = b.phase;
+    }
+  });
+  for (const m of run.marks) {
+    el('line', { x1: sx(m.x), x2: sx(m.x), y1: M.t, y2: H - M.b, stroke: css('--axis'), 'stroke-dasharray': '3 3' }, svg);
+  }
+}
+function line(svg, run, values, sx, sy, color, steps) {
+  const xs = run.columns.x; let d = '', open = false;
+  for (let i = 0; i < xs.length; i++) {
+    const v = values[i];
+    if (v === null || v === undefined || !isFinite(sy(v))) { open = false; continue; }
+    const X = sx(xs[i]).toFixed(1), Y = sy(v).toFixed(1);
+    if (!open) { d += `M${X},${Y}`; open = true; }
+    else if (steps) { d += `V${Y}H${X}`.replace(/V(.+)H(.+)/, `H${X}V${Y}`); }
+    else d += `L${X},${Y}`;
+  }
+  el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+}
+function lastPoint(run, values) {
+  for (let i = values.length - 1; i >= 0; i--) if (values[i] !== null && values[i] !== undefined) return i;
+  return -1;
+}
+function directLabels(svg, items, H, M) {
+  // items: {y, text, color}; spread to avoid overlap, inside the panel
+  items.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 12) items[i].y = items[i - 1].y + 12;
+  const over = items.length ? items[items.length - 1].y - (H - M.b - 2) : 0;
+  if (over > 0) items.forEach((it) => (it.y -= over));
+  for (const it of items) { const t = el('text', { x: it.x + 6, y: it.y + 4, class: 'direct' }, svg); t.textContent = it.text; }
+}
+function hoverLayer(svg, W, H, M, run, sx) {
+  const cross = el('line', { y1: M.t, y2: H - M.b, stroke: css('--cross'), 'stroke-width': 1, visibility: 'hidden' }, svg);
+  crosshairs.push({ cross, sx });
+  const hit = el('rect', { x: M.l, y: 0, width: W - M.l - M.r, height: H, fill: 'transparent' }, svg);
+  hit.addEventListener('pointermove', (ev) => {
+    const r = svg.getBoundingClientRect();
+    const xv = sx.invert(ev.clientX - r.left);
+    state.hover = nearest(run, xv); showHover(ev.clientX, ev.clientY);
+  });
+  hit.addEventListener('pointerleave', () => { state.hover = null; showHover(); });
+}
+function showHover(cx, cy) {
+  const run = DATA.runs[state.run], tip = $('tip'), i = state.hover;
+  for (const c of crosshairs) {
+    if (i === null) { c.cross.setAttribute('visibility', 'hidden'); continue; }
+    const X = c.sx(run.columns.x[i]); c.cross.setAttribute('x1', X); c.cross.setAttribute('x2', X); c.cross.setAttribute('visibility', 'visible');
+  }
+  if (i === null) { tip.hidden = true; return; }
+  const c = run.columns, F = run.factors;
+  let rows = '';
+  const head = `<tr><td></td>${Array.from({ length: F }, (_, g) => `<td style="color:var(${COLORS[g]})">factor ${g}</td>`).join('')}</tr>`;
+  for (const [k, n] of [['T', 'T'], ['C', 'capacity'], ['E', 'energy'], ['G', 'groups'], ['L', 'coupling']])
+    rows += `<tr><td>${n}</td>${Array.from({ length: F }, (_, g) => `<td>${fmt(c[k][g][i])}</td>`).join('')}</tr>`;
+  const held = c.held[i] !== null && c.held[i] !== undefined ? ` · held ${c.held[i]}` : '';
+  tip.innerHTML = `<div class="h">epoch ${c.x[i]} · step ${c.step[i]}, epoch ${c.epoch[i]} · ${c.phase[i]}</div>` +
+    `<div>screen ${fmt(c.screen[i])}${held}</div><table>${head}${rows}</table>`;
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = cx + 14, top = cy + 14;
+  if (left + w > window.innerWidth - 8) left = cx - w - 14;
+  if (top + h > window.innerHeight - 8) top = cy - h - 14;
+  tip.style.left = Math.max(8, left) + 'px'; tip.style.top = Math.max(8, top) + 'px';
+}
+function scaleX(run, W, M) {
+  const n = run.columns.x.length ? run.columns.x[run.columns.x.length - 1] : 1;
+  const f = (v) => M.l + (v / n) * (W - M.l - M.r);
+  f.invert = (p) => ((p - M.l) / (W - M.l - M.r)) * n;
+  f.max = n;
+  return f;
+}
+function xAxis(svg, sx, H, M) {
+  for (const t of niceTicks(0, sx.max, 8)) {
+    el('line', { x1: sx(t), x2: sx(t), y1: H - M.b, y2: H - M.b + 4, stroke: css('--axis') }, svg);
+    const tx = el('text', { x: sx(t), y: H - M.b + 15, 'text-anchor': 'middle' }, svg); tx.textContent = t;
+  }
+  const lab = el('text', { x: sx(sx.max), y: H - M.b + 28, 'text-anchor': 'end' }, svg); lab.textContent = 'epochs trained';
+}
+
+function renderStacked(box, run) {
+  const W = box.clientWidth, M = { l: 58, r: 74, t: 22, b: 8 }, F = run.factors;
+  PANELS.forEach((p, k) => {
+    const last = k === PANELS.length - 1, H = (last ? 150 : 128) + (k === 0 ? 14 : 0);
+    const m = { ...M, t: k === 0 ? 36 : 22, b: last ? 34 : 8 };
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': p.title }, box);
+    const sx = scaleX(run, W, m);
+    frame(svg, W, H, m, run, sx, k === 0);
+    const all = p.single ? [run.columns.screen, run.diagnoses.map((d) => d.share)] : Array.from({ length: F }, (_, g) => run.columns[p.key][g]);
+    let ext = p.domain ? p.domain.slice() : extent(all.flat(), p.log);
+    const title = el('text', { x: m.l, y: m.t - (k === 0 ? 20 : 8), class: 'title' }, svg); title.textContent = p.title + (p.log ? ' (log)' : '');
+    if (!ext) { const t = el('text', { x: m.l + 8, y: m.t + 24 }, svg); t.textContent = 'not logged in this run'; return; }
+    if (!p.domain) { const pad = (ext[1] - ext[0]) * 0.06; ext = [ext[0] - pad, ext[1] + pad]; }
+    const sy = (v) => { const w = p.log ? (v > 0 ? Math.log10(v) : NaN) : v; return H - m.b - ((w - ext[0]) / (ext[1] - ext[0])) * (H - m.t - m.b); };
+    const ticks = p.log ? niceTicks(Math.ceil(ext[0]), Math.floor(ext[1]), 4).filter(Number.isInteger) : niceTicks(ext[0], ext[1], 3);
+    for (const t of ticks) {
+      const v = p.log ? Math.pow(10, t) : t, Y = sy(v);
+      el('line', { x1: m.l, x2: W - m.r, y1: Y, y2: Y, stroke: css('--grid') }, svg);
+      const tx = el('text', { x: m.l - 6, y: Y + 3.5, 'text-anchor': 'end' }, svg); tx.textContent = p.log ? `1e${t}` : fmt(t);
+    }
+    const labels = [];
+    if (p.single) {
+      line(svg, run, run.columns.screen, sx, sy, css('--ink-2'), false);
+      for (const d of run.diagnoses) {
+        if (d.share === null || d.share === undefined) continue;
+        el('circle', { cx: sx(d.x), cy: sy(d.share), r: d.certified ? 5 : 3, fill: d.certified ? css('--good') : css('--s1'), stroke: css('--surface'), 'stroke-width': 2 }, svg);
+        if (d.certified) { const t = el('text', { x: sx(d.x) - 6, y: sy(d.share) + 16, 'text-anchor': 'end', class: 'direct' }, svg); t.textContent = `certified, step ${d.step}`; }
+      }
+      const i = lastPoint(run, run.columns.screen);
+      if (i >= 0) labels.push({ x: sx(run.columns.x[i]), y: sy(run.columns.screen[i]), text: 'screen' });
+    } else {
+      for (let g = 0; g < F; g++) {
+        const values = run.columns[p.key][g];
+        line(svg, run, values, sx, sy, css(COLORS[g]), p.steps);
+        const i = lastPoint(run, values);
+        if (i >= 0) labels.push({ x: sx(run.columns.x[i]), y: sy(values[i]), text: `factor ${g}` });
+      }
+    }
+    directLabels(svg, labels, H, m);
+    if (last) xAxis(svg, sx, H, m);
+    hoverLayer(svg, W, H, m, run, sx);
+  });
+}
+
+function renderOverlay(box, run) {
+  const W = box.clientWidth, H = 400, m = { l: 20, r: 84, t: 36, b: 34 }, g = state.factor;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': `factor ${g}'s quantities, each rescaled` }, box);
+  const sx = scaleX(run, W, m);
+  frame(svg, W, H, m, run, sx, true);
+  for (const t of [0, 0.5, 1]) { const Y = H - m.b - t * (H - m.t - m.b); el('line', { x1: m.l, x2: W - m.r, y1: Y, y2: Y, stroke: css('--grid') }, svg); }
+  const labels = [], legend = [];
+  OVERLAY.forEach((s, k) => {
+    const values = series(run, s.key, g), ext = extent(values, s.log);
+    if (!ext) return;
+    const sy = (v) => { const w = s.log ? (v > 0 ? Math.log10(v) : NaN) : v; return H - m.b - ((w - ext[0]) / (ext[1] - ext[0])) * (H - m.t - m.b); };
+    const color = s.single ? css('--ink-2') : css(COLORS[k]);
+    line(svg, run, values, sx, sy, color, s.key === 'G');
+    const i = lastPoint(run, values);
+    if (i >= 0) labels.push({ x: sx(run.columns.x[i]), y: sy(values[i]), text: s.name });
+    const lo = s.log ? Math.pow(10, ext[0]) : ext[0], hi = s.log ? Math.pow(10, ext[1]) : ext[1];
+    legend.push(`<span><i style="background:${color}"></i>${s.name} ${fmt(lo)} to ${fmt(hi)}${s.log ? ' (log)' : ''}</span>`);
+  });
+  directLabels(svg, labels, H, m);
+  xAxis(svg, sx, H, m);
+  hoverLayer(svg, W, H, m, run, sx);
+  $('legend').innerHTML = legend.join('');
+}
+
+function renderPhase(box, run) {
+  const W = box.clientWidth, m = { l: 58, r: 74, t: 26, b: 34 };
+  const legend = [];
+  if (!run.diagram || !run.diagram.length) { box.textContent = 'No warm-up end in this log: no phase diagram.'; return; }
+  run.diagram.forEach((d, g) => {
+    if (!d.points) return;
+    const temps = d.points.map((p) => p[0]).concat(d.curve.map((c) => c[0]), d.melting ? [d.melting] : []);
+    const lt = temps.filter((t) => t > 0).map(Math.log10);
+    let lo = Math.min(...lt), hi = Math.max(...lt); const padT = (hi - lo) * 0.03 || 0.1; lo -= padT; hi += padT;
+    const sx = (t) => m.l + ((hi - Math.log10(t)) / (hi - lo)) * (W - m.l - m.r);  // hot on the left: the cool runs left to right
+    const color = css(COLORS[g]);
+    const vline = (svg, t, H, label) => {
+      if (!t) return; const X = sx(t);
+      el('line', { x1: X, x2: X, y1: m.t, y2: H - m.b, stroke: css('--axis'), 'stroke-dasharray': '3 3' }, svg);
+      const tx = el('text', { x: X + 4, y: m.t + 10 }, svg); tx.textContent = label;
+    };
+    const tAxis = (svg, H) => {
+      for (let e = Math.ceil(lo * 2) / 2; e <= hi; e += 0.5) {
+        const X = sx(Math.pow(10, e)); el('line', { x1: X, x2: X, y1: H - m.b, y2: H - m.b + 4, stroke: css('--axis') }, svg);
+        const tx = el('text', { x: X, y: H - m.b + 15, 'text-anchor': 'middle' }, svg); tx.textContent = fmt(Math.pow(10, e));
+      }
+      const lab = el('text', { x: W - m.r, y: H - m.b + 28, 'text-anchor': 'end' }, svg); lab.textContent = 'temperature T (log, cooling to the right)';
+    };
+    // the bifurcation diagram: each code's coordinate on the codes' principal axis
+    let H = 240;
+    let svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': `factor ${g}'s codes against temperature` }, box);
+    const ys = d.points.map((p) => p[2]); let y0 = Math.min(...ys), y1 = Math.max(...ys); const pad = (y1 - y0) * 0.06 || 0.1; y0 -= pad; y1 += pad;
+    const sy = (v) => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.t - m.b);
+    const t1 = el('text', { x: m.l, y: m.t - 10, class: 'title' }, svg);
+    t1.textContent = `Factor ${g}: its codes on their principal axis (${Math.round(d.explained * 100)}% of their spread), each step's end`;
+    el('line', { x1: m.l, x2: W - m.r, y1: sy(0), y2: sy(0), stroke: css('--grid') }, svg);
+    vline(svg, d.melting, H, 'melting point'); vline(svg, d.critical, H, 'critical T');
+    for (const [t, step, y] of d.points) {
+      const c = el('circle', { cx: sx(t), cy: sy(y), r: 3.2, fill: color, 'fill-opacity': 0.75, stroke: css('--surface'), 'stroke-width': 1 }, svg);
+      const ti = el('title', {}, c); ti.textContent = `step ${step}, T ${fmt(t)}, coordinate ${fmt(y)}`;
+    }
+    tAxis(svg, H);
+    // the groups against temperature: training's, and the melting curve's on the warm-up's states
+    H = 170;
+    svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': `factor ${g}'s groups against temperature` }, box);
+    const t2 = el('text', { x: m.l, y: m.t - 10, class: 'title' }, svg); t2.textContent = `Factor ${g}: codes' groups against temperature`;
+    const gmax = Math.max(8, ...d.training.map((p) => p[1]), ...d.curve.map((c) => c[2]));
+    const gy = (v) => H - m.b - (v / gmax) * (H - m.t - m.b);
+    for (const v of niceTicks(0, gmax, 3)) {
+      el('line', { x1: m.l, x2: W - m.r, y1: gy(v), y2: gy(v), stroke: css('--grid') }, svg);
+      const tx = el('text', { x: m.l - 6, y: gy(v) + 3.5, 'text-anchor': 'end' }, svg); tx.textContent = v;
+    }
+    if (d.curve.length) {  // the melting curve: 1 group above the melting point, each transition's count below it
+      let path = `M${sx(Math.pow(10, hi))},${gy(d.curve[0][1])}`;
+      for (const [t, , to] of d.curve) path += `H${sx(t)}V${gy(to)}`;
+      path += `H${sx(Math.pow(10, lo))}`;
+      el('path', { d: path, fill: 'none', stroke: css('--ink-2'), 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }, svg);
+    }
+    for (const [t, n] of d.training) el('circle', { cx: sx(t), cy: gy(n), r: 3.2, fill: color, stroke: css('--surface'), 'stroke-width': 1 }, svg);
+    vline(svg, d.melting, H, '');
+    tAxis(svg, H);
+    legend.push(`<span><i style="background:${color}"></i>factor ${g}</span>`);
+  });
+  legend.push(`<span><i style="background:var(--ink-2)"></i>melting curve (dashed), measured at the warm-up's end</span>`);
+  $('legend').innerHTML = legend.join('');
+}
+
+// A general plot: one x scale and one y scale (linear or log, x optionally reversed), lines, steps and
+// points, reference lines; a point's `tip` shows on hover.
+function plot(box, o) {
+  const W = box.clientWidth, H = o.H || 220, m = { l: 58, r: 84, t: 26, b: 36 };
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': o.title }, box);
+  const t = el('text', { x: m.l, y: m.t - 10, class: 'title' }, svg); t.textContent = o.title;
+  const xs = [], ys = [];
+  for (const s of o.series) for (const p of s.pts) { if (p[0] !== null && p[1] !== null) { xs.push(p[0]); ys.push(p[1]); } }
+  for (const r of o.refs || []) { if (r.axis === 'x') xs.push(r.value); if (r.axis === 'y') ys.push(r.value); }
+  const ex = o.x.domain || extent(xs, o.x.log), ey = o.y.domain || extent(ys, o.y.log);
+  if (!ex || !ey) { const n = el('text', { x: m.l + 8, y: m.t + 24 }, svg); n.textContent = o.empty || 'nothing logged for this in this run'; return; }
+  const padded = (e, d) => (d ? e : [e[0] - (e[1] - e[0]) * 0.05, e[1] + (e[1] - e[0]) * 0.05]);
+  const [x0, x1] = padded(ex, o.x.domain), [y0, y1] = padded(ey, o.y.domain);
+  const tx = (v) => (o.x.log ? Math.log10(v) : v), ty = (v) => (o.y.log ? Math.log10(v) : v);
+  const sx = (v) => { const u = (tx(v) - x0) / (x1 - x0); return m.l + (o.x.reverse ? 1 - u : u) * (W - m.l - m.r); };
+  const sy = (v) => H - m.b - ((ty(v) - y0) / (y1 - y0)) * (H - m.t - m.b);
+  const ticks = (lo, hi, log, n) => (log ? niceTicks(Math.ceil(lo * 2) / 2, hi, n).filter((v) => Number.isInteger(v * 2)).map((v) => Math.pow(10, v)) : niceTicks(lo, hi, n));
+  for (const v of ticks(y0, y1, o.y.log, 4)) {
+    el('line', { x1: m.l, x2: W - m.r, y1: sy(v), y2: sy(v), stroke: css('--grid') }, svg);
+    const l = el('text', { x: m.l - 6, y: sy(v) + 3.5, 'text-anchor': 'end' }, svg); l.textContent = fmt(v);
+  }
+  for (const v of ticks(x0, x1, o.x.log, 7)) {
+    el('line', { x1: sx(v), x2: sx(v), y1: H - m.b, y2: H - m.b + 4, stroke: css('--axis') }, svg);
+    const l = el('text', { x: sx(v), y: H - m.b + 15, 'text-anchor': 'middle' }, svg); l.textContent = fmt(v);
+  }
+  const xl = el('text', { x: W - m.r, y: H - m.b + 29, 'text-anchor': 'end' }, svg); xl.textContent = o.x.label;
+  const yl = el('text', { x: W - m.r, y: m.t - 10, 'text-anchor': 'end' }, svg); yl.textContent = o.y.label ? `y: ${o.y.label}` : '';
+  for (const r of o.refs || []) {
+    if (r.axis === 'diag') {
+      const lo = Math.max(o.x.log ? Math.pow(10, x0) : x0, o.y.log ? Math.pow(10, y0) : y0), hi = Math.min(o.x.log ? Math.pow(10, x1) : x1, o.y.log ? Math.pow(10, y1) : y1);
+      el('line', { x1: sx(lo), y1: sy(lo), x2: sx(hi), y2: sy(hi), stroke: css('--axis'), 'stroke-dasharray': '4 4' }, svg);
+      if (r.label) { const l = el('text', { x: sx(hi) + 4, y: sy(hi) + 4 }, svg); l.textContent = r.label; }
+    } else if (r.axis === 'line') {  // y = slope x through the origin
+      const a = o.x.log ? Math.pow(10, x0) : x0, b = o.x.log ? Math.pow(10, x1) : x1;
+      el('line', { x1: sx(a), y1: sy(r.slope * a), x2: sx(b), y2: sy(r.slope * b), stroke: css('--axis'), 'stroke-dasharray': '4 4' }, svg);
+      if (r.label) { const l = el('text', { x: sx(b) + 4, y: sy(r.slope * b) + 4 }, svg); l.textContent = r.label; }
+    } else {
+      const X = r.axis === 'x', P = X ? sx(r.value) : sy(r.value);
+      el('line', X ? { x1: P, x2: P, y1: m.t, y2: H - m.b } : { x1: m.l, x2: W - m.r, y1: P, y2: P }, svg).setAttribute('stroke', css('--axis'));
+      svg.lastChild.setAttribute('stroke-dasharray', '3 3');
+      if (r.label) { const l = el('text', X ? { x: P + 4, y: m.t + 10 } : { x: W - m.r + 6, y: P + 4 }, svg); l.textContent = r.label; }
+    }
+  }
+  const labels = [];
+  for (const s of o.series) {
+    const pts = s.pts.filter((p) => p[0] !== null && p[1] !== null && (!o.x.log || p[0] > 0) && (!o.y.log || p[1] > 0));
+    if (s.mode !== 'points' && pts.length) {
+      let d = '';
+      pts.forEach((p, i) => { const X = sx(p[0]).toFixed(1), Y = sy(p[1]).toFixed(1); d += i === 0 ? `M${X},${Y}` : s.mode === 'step' ? `H${X}V${Y}` : `L${X},${Y}`; });
+      el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': s.width || 2, 'stroke-dasharray': s.dash || 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-opacity': s.opacity || 1 }, svg);
+    }
+    if (s.mode === 'points' || s.dots) {
+      for (const p of pts) {
+        const c = el('circle', { cx: sx(p[0]), cy: sy(p[1]), r: (p[3] && p[3].r) || s.r || 3.5, fill: (p[3] && p[3].fill) || s.color, 'fill-opacity': s.opacity || 0.85, stroke: css('--surface'), 'stroke-width': 1.5 }, svg);
+        if (p[2]) { const ti = el('title', {}, c); ti.textContent = p[2]; }
+      }
+    }
+    if (s.label && pts.length) { const p = pts[pts.length - 1]; labels.push({ x: sx(p[0]), y: sy(p[1]), text: s.label }); }
+  }
+  directLabels(svg, labels, H, m);
+}
+const factorColor = (g) => css(COLORS[g]);
+const legendFactors = (run, extra) => { $('legend').innerHTML = Array.from({ length: run.factors }, (_, g) => `<span><i style="background:var(${COLORS[g]})"></i>factor ${g}</span>`).join('') + (extra || ''); };
+const melting = (run, g) => (run.diagram && run.diagram[g] ? run.diagram[g].melting : null);
+
+function renderHeat(box, run) {
+  // 1. the heat curves: energy and capacity against temperature, the heating and cooling branches apart
+  const c = run.columns;
+  for (let g = 0; g < run.factors; g++) {
+    for (const [key, name, log] of [['E', 'energy ⟨D⟩', false], ['C', 'heat capacity C', true]]) {
+      const branch = (phases) => c.x.map((_, i) => (phases.includes(c.phase[i]) ? [c.T[g][i], c[key][g][i], `epoch ${c.x[i]} · ${c.phase[i]} · T ${fmt(c.T[g][i])} · ${name} ${fmt(c[key][g][i])}`] : [null, null])).filter((p) => p[0] !== null && p[1] !== null);
+      const m = melting(run, g);
+      plot(box, {
+        title: `Factor ${g}: ${name} against temperature (log), heating and cooling`, H: 210,
+        x: { log: true, reverse: true, label: 'temperature T (cooling to the right)' }, y: { log, label: log ? 'log' : '' },
+        series: [
+          { pts: branch(['heat']), color: css('--s2'), dots: true, r: 3, label: 'heating' },
+          { pts: branch(['hold']), color: css('--s3'), mode: 'points', r: 2.5, label: 'hold' },
+          { pts: branch(['cool']), color: css('--s1'), dots: true, r: 2.5, label: 'cooling' },
+        ],
+        refs: m ? [{ axis: 'x', value: m, label: 'melting point' }] : [],
+      });
+    }
+  }
+  $('legend').innerHTML = `<span><i style="background:var(--s2)"></i>heating</span><span><i style="background:var(--s3)"></i>hold</span><span><i style="background:var(--s1)"></i>cooling</span>`;
+}
+
+function renderSplits(box) {
+  // 2. every page run's splits: the temperature each was seen at against the melting curve's prediction
+  const series = [];
+  DATA.runs.forEach((run, k) => (run.splits || []).forEach((found, g) => {
+    const pts = found.filter((p) => p[2] !== null).map(([t, n, pred, first]) => [pred, t, `${run.name} · factor ${g} · to ${n} groups · seen at T ${fmt(t)}, predicted ${fmt(pred)}${first ? ' · nucleation' : ''}`, { r: first ? 6 : 3.5 }]);
+    series.push({ pts, color: css(COLORS[k % COLORS.length]), mode: 'points' });
+  }));
+  plot(box, {
+    title: 'Splits: the temperature training reached each group count, against the melting curve\'s', H: 380,
+    x: { log: true, label: 'predicted T (the melting curve, on the warm-up\'s states)' }, y: { log: true, label: 'seen in training (log)' },
+    series, refs: [{ axis: 'diag', label: 'as predicted' }], empty: 'No run here has both a melting curve and splits.',
+  });
+  $('legend').innerHTML = DATA.runs.slice(0, COLORS.length).map((run, k) => `<span><i style="background:var(${COLORS[k]})"></i>${run.name}</span>`).join('');
+}
+
+function renderOrder(box, run) {
+  // 3. the order parameter (the snapped state share at each step's end) against temperature and coupling
+  const c = run.columns;
+  const at = (d) => { let i = c.x.indexOf(d.x); return i; };
+  const pick = (key, g) => run.diagnoses.map((d) => { const i = at(d); return i < 0 ? [null, null] : [c[key][g][i], d.share, `step ${d.step} · ${key === 'T' ? 'T' : 'coupling'} ${fmt(c[key][g][i])} · share ${fmt(d.share)}${d.certified ? ' · certified' : ''}`, d.certified ? { r: 6, fill: css('--good') } : null]; });
+  const series = (key) => Array.from({ length: run.factors }, (_, g) => ({ pts: pick(key, g), color: factorColor(g), dots: true, r: 3.5, opacity: 0.85, label: `factor ${g}` }));
+  plot(box, { title: 'State share at each step\'s end against each factor\'s temperature', H: 260, x: { log: true, reverse: true, label: 'temperature T (cooling to the right)' }, y: { domain: [0, 1], label: 'state share' }, series: series('T') });
+  plot(box, { title: 'State share at each step\'s end against each factor\'s coupling', H: 260, x: { domain: [0, 1], label: 'coupling l (0 the cell\'s output, 1 the code)' }, y: { domain: [0, 1], label: 'state share' }, series: series('L') });
+  legendFactors(run, `<span><i style="background:var(--good);height:8px;width:8px;border-radius:50%"></i>certified</span>`);
+}
+
+function renderSteps(box, run) {
+  // 5. the step rule: each temperature step's d ln T against 1 / sqrt(mean capacity); the rule is the line pace x
+  const series = (run.steps || []).map((levels, g) => ({
+    pts: levels.filter((l) => l[2] > 0).map(([t, n, cbar, d, cap]) => [1 / Math.sqrt(cbar), d, `T ${fmt(t)} · ${n} epochs at it · C̄ ${fmt(cbar)} · d ln T ${fmt(d)}${cap ? ' · left at the cap' : ''}`, cap ? { r: 6, fill: css('--s4') } : null]),
+    color: factorColor(g), mode: 'points', r: 3.5,
+  }));
+  const pace = run.pace || 0.03;  // a run from before the adaptive cool: the rule at its default, for comparison
+  const refs = [{ axis: 'line', slope: pace, label: `pace ${pace}` }, { axis: 'y', value: Math.log(2), label: 'an octave' }];
+  plot(box, { title: `Each temperature step against the capacity there (${run.shape || 'unknown'} cool)`, H: 340, x: { log: true, label: '1 / sqrt(mean capacity at the temperature)' }, y: { log: true, label: 'd ln T (log)' }, series, refs });
+  legendFactors(run, run.settle ? `<span><i style="background:var(--s4);height:8px;width:8px;border-radius:50%"></i>left at the cap (${run.settle} epochs)</span>` : '');
+  $('note').textContent = run.shape === 'adaptive'
+    ? 'The adaptive cool steps by T exp(-pace / sqrt(C̄)), at most an octave: its points should lie on the dashed line or the octave. Points off it show the rule mis-read.'
+    : 'A precomputed cool: its steps are set by the epoch, not the capacity. The dashed line is the adaptive rule at its pace, for comparison: points above it stepped faster than the rule would have.';
+}
+
+function renderMachine(box, run) {
+  // 7. the machine's size over the run: its minimised states and joint codes against the target's, pairs per code
+  const D = run.diagnoses.filter((d) => d.minimised !== null && d.minimised !== undefined);
+  const tip = (d) => `step ${d.step} · minimised ${d.minimised} · codes ${d.codes} · pairs ${d.pairs} · right ${d.right}${d.certified ? ' · certified' : ''}`;
+  const refs = run.q ? [{ axis: 'y', value: run.q, label: `target ${run.q}` }] : [];
+  plot(box, {
+    title: 'Minimised states and joint codes in use at each step\'s end', H: 240, x: { label: 'epochs trained' }, y: { log: true, label: 'states (log)' }, refs,
+    series: [
+      { pts: D.map((d) => [d.x, d.minimised, tip(d)]), color: css('--s1'), mode: 'step', dots: true, r: 2.5, label: 'minimised' },
+      { pts: D.map((d) => [d.x, d.codes, tip(d)]), color: css('--s2'), mode: 'step', dots: true, r: 2.5, label: 'joint codes' },
+    ],
+  });
+  plot(box, {
+    title: 'Pairs per code (1: each code one target state)', H: 200, x: { label: 'epochs trained' }, y: { log: true, label: 'log' }, refs: [{ axis: 'y', value: 1, label: 'one' }],
+    series: [{ pts: D.filter((d) => d.codes).map((d) => [d.x, d.pairs / d.codes, tip(d)]), color: css('--s3'), mode: 'step', dots: true, r: 2.5, label: 'pairs per code' }],
+  });
+  plot(box, {
+    title: 'Each factor\'s codes in use', H: 200, x: { label: 'epochs trained' }, y: { label: 'codes' },
+    series: Array.from({ length: run.factors }, (_, g) => ({ pts: D.map((d) => [d.x, d.in_use[g] ?? null, tip(d)]), color: factorColor(g), mode: 'step', label: `factor ${g}` })),
+  });
+  $('legend').innerHTML = `<span><i style="background:var(--s1)"></i>minimised states</span><span><i style="background:var(--s2)"></i>joint codes</span><span><i style="background:var(--s3)"></i>pairs per code</span>`;
+}
+
+function renderTable(run) {
+  const c = run.columns, F = run.factors;
+  const head = ['epoch', 'step', 'phase', 'screen'].concat(...['T', 'C', 'E', 'G', 'L'].map((k) => Array.from({ length: F }, (_, g) => `${k}${g}`)));
+  let html = `<table><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+  for (let i = 0; i < c.x.length; i++) {
+    const cells = [c.x[i], `${c.step[i]}.${c.epoch[i]}`, c.phase[i], fmt(c.screen[i])];
+    for (const k of ['T', 'C', 'E', 'G', 'L']) for (let g = 0; g < F; g++) cells.push(fmt(c[k][g][i]));
+    html += `<tr>${cells.map((v) => `<td>${v}</td>`).join('')}</tr>`;
+  }
+  $('table').innerHTML = html + '</tbody></table>';
+}
+
+function render() {
+  const run = DATA.runs[state.run], box = $('chart');
+  box.innerHTML = ''; crosshairs = [];
+  $('reading').textContent = run.reading ? `heat-capacity: ${run.reading}` : '';
+  $('factor-wrap').hidden = state.view !== 'overlay';
+  $('v-stacked').setAttribute('aria-pressed', state.view === 'stacked');
+  $('v-overlay').setAttribute('aria-pressed', state.view === 'overlay');
+  for (const v of ['stacked', 'overlay', 'phase', 'heat', 'splits', 'order', 'steps', 'machine']) $('v-' + v).setAttribute('aria-pressed', state.view === v);
+  if (state.view === 'stacked') {
+    $('legend').innerHTML = Array.from({ length: run.factors }, (_, g) => `<span><i style="background:var(${COLORS[g]})"></i>factor ${g}</span>`).join('') +
+      `<span><i style="background:var(--ink-2)"></i>screen</span><span><i style="background:var(--good);height:8px;width:8px;border-radius:50%"></i>certified</span>`;
+    $('note').textContent = 'Shaded bands are the phases; dashed lines mark the warm-up\'s end and growth. Gaps: a factor hard (no temperature) or not yet profiled.';
+    renderStacked(box, run);
+  } else if (state.view === 'heat') {
+    $('note').textContent = 'The textbook curves: capacity peaks mark the transitions; where heating and cooling branches part, the profile ran out of equilibrium.';
+    renderHeat(box, run);
+  } else if (state.view === 'splits') {
+    $('note').textContent = 'Every run on this page. Large points: nucleation. Training counts groups closer than T max(1/100, 10 kappa) squared, the curve closer than T/100, so by construction training would see a split later (lower T, below the diagonal). Points above it split earlier than the warm-up\'s states predict: the material moved after the warm-up, or the thermal noise parted the codes.';
+    renderSplits(box);
+  } else if (state.view === 'order') {
+    $('note').textContent = 'The state share as an order parameter: where it rises against T is the crystal forming; against the coupling, whether the state forms before the codes carry the forward path or because they do.';
+    renderOrder(box, run);
+  } else if (state.view === 'steps') {
+    renderSteps(box, run);
+  } else if (state.view === 'machine') {
+    $('note').textContent = 'The snapped machine walked beside the target at each step\'s end. A certificate needs minimised states at the target\'s count and one pair per code.';
+    renderMachine(box, run);
+  } else if (state.view === 'phase') {
+    $('note').textContent = 'Rose\'s bifurcation diagram: in the melt the codes sit together; each split as the run cools is a phase transition. Points: each step\'s saved network, at the temperature its last epoch trained at; hover a point for its step.';
+    renderPhase(box, run);
+  } else {
+    $('note').textContent = 'Each line is rescaled to its own range (in the legend), so shapes and timing compare, not values. T and capacity on log scales.';
+    renderOverlay(box, run);
+  }
+  if ($('table-details').open) renderTable(run);
+}
+
+function init() {
+  $('run').innerHTML = DATA.runs.map((r, i) => `<option value="${i}">${r.name}</option>`).join('');
+  const setFactors = () => { $('factor').innerHTML = Array.from({ length: DATA.runs[state.run].factors }, (_, g) => `<option value="${g}">factor ${g}</option>`).join(''); state.factor = 0; };
+  setFactors();
+  $('run').addEventListener('change', (e) => { state.run = +e.target.value; setFactors(); render(); });
+  $('factor').addEventListener('change', (e) => { state.factor = +e.target.value; render(); });
+  $('v-stacked').addEventListener('click', () => { state.view = 'stacked'; render(); });
+  $('v-overlay').addEventListener('click', () => { state.view = 'overlay'; render(); });
+  for (const v of ['phase', 'heat', 'splits', 'order', 'steps', 'machine']) $('v-' + v).addEventListener('click', () => { state.view = v; render(); });
+  $('table-details').addEventListener('toggle', () => { if ($('table-details').open) renderTable(DATA.runs[state.run]); });
+  let t; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(render, 80); }).observe($('chart'));
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  render();
+}
+init();
+</script>

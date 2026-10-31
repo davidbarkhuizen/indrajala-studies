@@ -1,0 +1,16 @@
+{
+ "directory": "data/addition/calibration",
+ "workers": 4,
+ "max_epochs": 200,
+ "patience": 40,
+ "studies": [
+  {"candidate": "column-causal", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"layers": 2, "heads": 1}], "rungs": [12]},
+  {"candidate": "column-unordered", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"layers": 2, "heads": 1}], "rungs": [12]},
+  {"candidate": "column-noncausal", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"layers": 2, "heads": 1}], "rungs": [12]},
+  {"candidate": "column-ffn", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"layers": 2, "heads": 1}], "rungs": [16]},
+  {"candidate": "string-causal", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"layers": 2, "heads": 1}], "rungs": [12]},
+  {"candidate": "dense-per-digit", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"depth": 2}], "rungs": [8]},
+  {"candidate": "regression-digits", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"depth": 2}], "rungs": [32]},
+  {"candidate": "regression-scalars", "n": 4, "rates": [0.001, 0.003, 0.01], "search": "grid", "shapes": [{"depth": 2}], "rungs": [32]}
+ ]
+}

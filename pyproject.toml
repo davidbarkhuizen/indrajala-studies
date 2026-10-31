@@ -25,7 +25,7 @@ extend-exclude = ["ml"]  # ml's own repo (submodule)
 # Strict everywhere, as in ml. ml/ is on extraPaths because its editable install is an import hook,
 # which pyright can't follow.
 [tool.pyright]
-include = ["indrajala_studies", "tests"]  # and scripts/, once the move brings it
+include = ["indrajala_studies", "tests", "scripts"]
 typeCheckingMode = "strict"
 extraPaths = ["ml"]
 executionEnvironments = [{ root = "tests", extraPaths = [".", "ml", "scripts/studies", "scripts/paper", "scripts/data"], reportPrivateUsage = false }]
