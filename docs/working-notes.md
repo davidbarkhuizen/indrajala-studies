@@ -125,6 +125,11 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
   the controller acks each `ended`: a worker resends the unacknowledged ones (`ROOT/acked/`) on its
   next connection, listed in its hello so they aren't lost, and leaves a drain only once every end is
   acked. A worker at this commit needs a controller at it (an older one never acks: no drain ends).
+- **The runner's worktree is `wt-studies`, not `wt-batch`** (2026-10-31): every host's `~/code/wt-batch`
+  is a worktree of its ml clone from before the separation, and `prepare` falls back to a checkout in an
+  existing directory, which can't reach a studies commit there. A tagged batch (`wt-studies-<tag>`)
+  never met it, so the first test batch on `jebel` passed. The old ml worktrees can go (`git -C
+  ~/code/indrajala-ml worktree remove --force ~/code/wt-batch`).
 - **The crate is pinned too** (D6): `register` records the crate extension's SHA-256 (`--crate`, default
   the registering machine's) and the controller refuses a worker that imports another. Builds of one
   source differ by machine, so every host imports one build: `b.CRATE` (`crate-647f23c`), the package
@@ -249,10 +254,10 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
   diagnostic's). Wait on a log line instead (`until grep -q "ended" .../launch.log`), and have each
   launch script write one.
 - **A second batch beside a running one on the same host needs its own code, root and port**
-  (2026-10-25, T11 on `klip` beside T10): `prepare` would move the host's `wt-batch`, which the running
+  (2026-10-25, T11 on `klip` beside T10): `prepare` would move the host's `wt-studies`, which the running
   batch's worker loads code from for every new attempt; and a worker adopts every running attempt
   in its root from their pid files (`Worker.adopt`), so a second worker in the same root takes the
-  first batch's. So: a worktree of its own at the batch's commit (`~/code/wt-batch-<name>`), a root
+  first batch's. So: a worktree of its own at the batch's commit (`~/code/wt-studies-<name>`), a root
   of its own (`~/code/batch-attempts-<name>`), its controller on another port with the tunnel by hand
   (as `batch.tunnel`; it doesn't reopen itself), and the worker started by hand (as
   `batch.worker_line`). A controller without `--hosts` assigns to any host and **pulls nothing**

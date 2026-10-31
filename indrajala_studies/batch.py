@@ -253,11 +253,12 @@ CRATE = "crate-647f23c"
 # the laptops always; slots are cores less the worker's, bounded by memory (pyramidon and klip 5 GB):
 # klip all its cores (the owner: "klip always on, all cores", <= 85 C under the thermal guard; about
 # 220 MB a paper-cell run, 7 runs about 1.5 GB), pyramidon 3 beside development.
+# The worktree is wt-studies: each host's wt-batch is a worktree of its ml clone from before the separation.
 HOSTS: dict[str, Host] = {
     "pyramidon": Host(
         "pyramidon",
         3,
-        "/home/david/code/wt-batch",
+        "/home/david/code/wt-studies",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
         pythonpath=f"/home/david/code/{CRATE}",
@@ -266,7 +267,7 @@ HOSTS: dict[str, Host] = {
     "klip": Host(
         "klip",
         7,
-        "/home/david/code/wt-batch",
+        "/home/david/code/wt-studies",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
         pythonpath=f"/home/david/code/{CRATE}",
@@ -275,7 +276,7 @@ HOSTS: dict[str, Host] = {
     "jebel": Host(
         "jebel",
         7,
-        "/home/david/code/wt-batch",
+        "/home/david/code/wt-studies",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
         pythonpath=f"/home/david/code/{CRATE}",
@@ -284,7 +285,7 @@ HOSTS: dict[str, Host] = {
     "stone": Host(
         "stone",
         11,
-        "/home/david/labour/code/wt-batch",
+        "/home/david/labour/code/wt-studies",
         "/home/david/labour/code/wt-branches/.venv/bin/python",
         "/home/david/labour/batch-attempts",
         pythonpath=f"/home/david/labour/{CRATE}",
@@ -949,7 +950,7 @@ def code_paths(code: str) -> tuple[str, str]:
 # each host's clones (the research-separation plan, D6): a batch's worktree is a studies worktree at the
 # batch's commit, its ml submodule checked out from the host's own ml clone (no crate build: the batch's
 # crate comes from CRATE on PYTHONPATH)
-STUDIES_URL = "git@github.com:davidbarkhuizen/indrajala-studies.git"
+STUDIES_URL = "https://github.com/davidbarkhuizen/indrajala-studies.git"  # public: no key on the hosts
 CLONES = {"stone": ("~/labour/code/indrajala-studies", "~/labour/code/indrajala-ml")}
 DEFAULT_CLONES = ("~/code/indrajala-studies", "~/code/indrajala-ml")
 
@@ -988,6 +989,7 @@ def prepare(host: Host, commit: str, repo: Path, scratch: Path) -> list[list[str
                 f"git -C {sub} fetch -q origin && git -C {sub} branch -f batch-pin $(git -C {here} rev-parse {commit}:ml)",
             ],
             ["git", "-C", str(repo / "ml"), "bundle", "create", "-q", str(bundles[1]), "batch-pin"],
+            ["ssh", host.name, "mkdir -p ~/labour/bundles"],
             ["scp", "-q", str(bundles[0]), f"{host.name}:labour/bundles/batch.bundle"],
             ["scp", "-q", str(bundles[1]), f"{host.name}:labour/bundles/batch-ml.bundle"],
             [

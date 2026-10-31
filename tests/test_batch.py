@@ -366,11 +366,12 @@ def test_the_fleets_commands_follow_each_hosts_rules():
     assert "--slots 11" in stone and "setsid nohup" in stone and stone.endswith("< /dev/null &")
     klip = b.worker_line(b.HOSTS["klip"], 47111)
     assert "--wrapper=scripts/runner/thermal_guard.sh" in klip and "--wrapper=--" in klip
-    assert f"PYTHONPATH=/home/david/code/{b.CRATE}:/home/david/code/wt-batch:/home/david/code/wt-batch/ml " in klip
+    assert f"PYTHONPATH=/home/david/code/{b.CRATE}:/home/david/code/wt-studies:/home/david/code/wt-studies/ml " in klip
     steps = b.prepare(b.HOSTS["stone"], "abc123", Path("/repo"), Path("/tmp"))
     assert steps[1][3:5] == ["bundle", "create"] and steps[3][3:5] == ["bundle", "create"]
-    assert "rev-parse abc123:ml" in steps[2][2] and "--no-recurse-submodules" in steps[6][2]
-    assert "cd ~/labour/code/indrajala-studies" in steps[6][2] and "submodule update" in steps[6][2]
+    assert steps[4] == ["ssh", "stone", "mkdir -p ~/labour/bundles"]
+    assert "rev-parse abc123:ml" in steps[2][2] and "--no-recurse-submodules" in steps[7][2]
+    assert "cd ~/labour/code/indrajala-studies" in steps[7][2] and "submodule update" in steps[7][2]
     (klip_step,) = b.prepare(b.HOSTS["klip"], "abc123", Path("/repo"), Path("/tmp"))
     assert klip_step[2].startswith("cd ~/code/indrajala-ml && git fetch -q origin")
     assert (
@@ -659,7 +660,7 @@ def test_an_opened_host_takes_work_outside_its_hours():
 
 def test_a_tagged_batch_runs_in_its_own_worktree_and_root():
     klip = b.tagged(b.HOSTS, "t10r")["klip"]
-    assert klip.code == "/home/david/code/wt-batch-t10r" and klip.root == "/home/david/code/batch-attempts-t10r"
+    assert klip.code == "/home/david/code/wt-studies-t10r" and klip.root == "/home/david/code/batch-attempts-t10r"
     assert klip.wrapper[0] == b.HOSTS["klip"].wrapper[0]  # the guard itself shared
     assert klip.wrapper[1] == "/home/david/code/batch-attempts-t10r/temp"  # its temperature file its root's
     assert b.tagged(b.HOSTS, "") is b.HOSTS and b.HOSTS["klip"].root == "/home/david/code/batch-attempts"
