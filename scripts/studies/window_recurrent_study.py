@@ -62,7 +62,7 @@ moves from where it sat early on (indrajala_studies/window_drift.py): over the c
 first --cases at --n, the wrong digits by position (--bins equal bins) and by the target's state
 entering and leaving the column, and per target state each bin's state centroid's shift from
 the first bin's and its spread, beside the separation of the first bin's centroids. No lock; one core.
-`replay` is a step replayed from a saved network (indrajala_studies/window_replay.py,
+`replay` is a step replayed from a saved network (ml's indrajala_ml/studies/window_replay.py,
 the snap wall workplan, retired: git show 53d7fef:docs/workplans/snap-wall-workplan.md): --epochs of --step's data of --run in --config, each epoch drawn by
 --generator; per batch the loss before and after and the update's norm, per epoch the screen, the
 certificate in both verdicts and the code margins (the least snap ratio; per snapped factor the
@@ -686,10 +686,10 @@ from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_replay as wrp
 from indrajala_ml.studies import window_tasks as wt
 
 from indrajala_studies import window_drift as wdr
-from indrajala_studies import window_replay as wrp
 
 
 def main(argv: list[str]) -> int:
