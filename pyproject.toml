@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "indrajala-studies"
+version = "0.1.0"
+description = "The research studies run on indrajala-ml: their code, scripts, configs and tests."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+# ml/ (a submodule, installed editable by ./cli setup) pins its own dependencies.
+dependencies = ["indrajala-ml"]
+
+[tool.setuptools.packages.find]
+include = ["indrajala_studies*"]
+
+# The same settings as ml's (the studies-repo workplan's D6); ruff and pyright are pinned in ./cli.
+[tool.ruff]
+line-length = 120
+extend-exclude = ["ml"]  # ml's own repo (submodule)
+
+[tool.ruff.lint]
+
+# Strict everywhere, as in ml. ml/ is on extraPaths because its editable install is an import hook,
+# which pyright can't follow.
+[tool.pyright]
+include = ["indrajala_studies", "tests"]  # and scripts/, once the move brings it
+typeCheckingMode = "strict"
+extraPaths = ["ml"]
+executionEnvironments = [{ root = "tests", extraPaths = [".", "ml", "scripts/studies", "scripts/paper", "scripts/data"], reportPrivateUsage = false }]

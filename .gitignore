@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv
+# CI's cached indrajala_math_rust wheel (./cli setup --rust-wheel-dir)
+.rust-wheel/

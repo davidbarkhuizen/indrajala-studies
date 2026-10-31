@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# x86_64 only (the studies-repo workplan's D7): the crate's cross-architecture parity is ml's and
+# the crate's job. The caches are ml's: the venv keyed on ml's lock and this package's
+# pyproject.toml, the crate's wheel on ml/rust's commit and the maturin pin.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v7
+        id: setup-python
+        with:
+          python-version: "3.14"
+
+      - name: Cache venv
+        uses: actions/cache@v6
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('ml/requirements.txt', 'pyproject.toml') }}
+
+      - name: Rust wheel key
+        id: rust-commit
+        run: |
+          echo "sha=$(git -C ml/rust rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "maturin=$(sed -n 's/^maturin_version="\(.*\)"$/\1/p' cli)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache crate wheel
+        id: rust-wheel
+        uses: actions/cache@v6
+        with:
+          path: .rust-wheel
+          key: rust-wheel-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
+
+      - name: Install pinned Rust toolchain
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        working-directory: ml/rust
+        run: rustup toolchain install
+
+      - name: Cache crate dependency builds
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ml/rust -> target
+
+      - name: Setup
+        run: ./cli setup --rust-wheel-dir .rust-wheel
+
+      - name: Lint
+        run: ./cli lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v7
+        id: setup-python
+        with:
+          python-version: "3.14"
+
+      - name: Cache venv
+        uses: actions/cache@v6
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('ml/requirements.txt', 'pyproject.toml') }}
+
+      - name: Rust wheel key
+        id: rust-commit
+        run: |
+          echo "sha=$(git -C ml/rust rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "maturin=$(sed -n 's/^maturin_version="\(.*\)"$/\1/p' cli)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache crate wheel
+        id: rust-wheel
+        uses: actions/cache@v6
+        with:
+          path: .rust-wheel
+          key: rust-wheel-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
+
+      - name: Install pinned Rust toolchain
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        working-directory: ml/rust
+        run: rustup toolchain install
+
+      - name: Cache crate dependency builds
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ml/rust -> target
+
+      - name: Setup
+        run: ./cli setup --rust-wheel-dir .rust-wheel
+
+      - name: Test
+        run: ./cli test
