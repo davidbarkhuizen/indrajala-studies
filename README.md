@@ -7,7 +7,8 @@ runs. The findings, the papers and the research workplans are in
 
 It is a first step, not the whole split: the code moved is what nothing left in ml needs (ml's
 `docs/workplans/infrastructure/studies-repo-workplan.md`). The window-recurrent harness, its tasks,
-the certificate and the batch runner stay in ml for now.
+the certificate, `chow`, `window_replay` and the batch runner stay in ml for now, and so do the
+window-recurrent configs: run them from `ml/scripts/studies/configs/`.
 
 **Paper 1** is reproduced from the tags `paper1-v1` and `paper1-v1.1` in ml and the crate, where the
 paper's scripts still live under their old paths, and from its datapack
