@@ -8,3 +8,7 @@ dist/
 .venv
 # CI's cached indrajala_math_rust wheel (./cli setup --rust-wheel-dir)
 .rust-wheel/
+# the studies' results, every run's networks and the paper's data (moved from indrajala-ml's
+# gitignored data/ on 2026-10-31, the research-separation workplan's D8): never committed, kept
+# with their manifests (*.sha256)
+data/
