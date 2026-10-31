@@ -1,0 +1,12 @@
+{
+ "directory": "data/addition/sweep",
+ "workers": 6,
+ "studies": [
+  {"candidate": "column-causal", "n": 4, "rates": [0.003], "search": "bisect"},
+  {"candidate": "column-unordered", "n": 4, "rates": [0.003], "search": "bisect"},
+  {"candidate": "column-noncausal", "n": 4, "rates": [0.003], "search": "bisect"},
+  {"candidate": "column-causal", "n": 6, "rates": [0.003], "search": "bisect"},
+  {"candidate": "column-unordered", "n": 6, "rates": [0.003], "search": "bisect"},
+  {"candidate": "column-noncausal", "n": 6, "rates": [0.003], "search": "bisect"}
+ ]
+}
