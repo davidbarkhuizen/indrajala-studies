@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from indrajala_ml.studies import window_recurrent_study as wr
-from indrajala_ml.studies import window_tasks as wt
+
+from indrajala_studies import window_recurrent_study as wr
+from indrajala_studies import window_tasks as wt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "studies"))
 import window_recurrent_study as script  # scripts/ isn't a package

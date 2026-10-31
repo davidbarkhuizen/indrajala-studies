@@ -1,0 +1,12 @@
+{
+ "directory": "data/window-recurrent/e3-e4",
+ "workers": 6,
+ "seeds": 20,
+ "tests_past_break": false,
+ "matrix": [
+  {"arm": "curriculum", "k": [4], "s": [4], "m": [3, 4, 6, 8, 16, 32]},
+  {"arm": "curriculum", "k": [1], "s": [16], "m": [3, 4, 8, 16]},
+  {"arm": "all-at-once", "k": [4], "s": [4], "m": [16]},
+  {"arm": "all-at-once", "k": [1], "s": [16], "m": [8]}
+ ]
+}

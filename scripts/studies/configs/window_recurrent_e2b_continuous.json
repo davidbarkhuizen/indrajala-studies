@@ -1,0 +1,11 @@
+{
+ "directory": "data/window-recurrent/e2b-continuous",
+ "workers": 6,
+ "tests_past_break": false,
+ "seeds": 20,
+ "steps": 18,
+ "certify_steps": true,
+ "matrix": [
+  {"arm": "curriculum", "window": "linear", "k": [1], "s": [16], "m": [null]}
+ ]
+}

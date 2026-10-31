@@ -32,9 +32,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-from indrajala_ml.data import addition_data as ad
-from indrajala_ml.studies import window_recurrent_study as wr
-from indrajala_ml.studies import window_tasks as wt
+
+from indrajala_studies import addition_data as ad
+from indrajala_studies import window_recurrent_study as wr
+from indrajala_studies import window_tasks as wt
 
 CASES = 3_000
 BINS = 8

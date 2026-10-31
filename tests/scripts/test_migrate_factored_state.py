@@ -8,11 +8,11 @@ from typing import Any
 
 import pytest
 from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.studies import window_recurrent_certificate as wc
-from indrajala_ml.studies import window_recurrent_study as wr
-from indrajala_ml.studies import window_tasks as wt
 
-from tests.helpers import CarryMachine, TaskMachine
+from indrajala_studies import window_recurrent_certificate as wc
+from indrajala_studies import window_recurrent_study as wr
+from indrajala_studies import window_tasks as wt
+from tests.test_window_recurrent_certificate import CarryMachine, TaskMachine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "data"))
 import migrate_factored_state as migrate  # scripts/ isn't a package

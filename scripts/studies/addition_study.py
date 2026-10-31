@@ -1,7 +1,7 @@
 """
 The addition study (its workplan retired: git show 8990f74:docs/addition-study-workplan.md): the
 smallest network, of eight candidates built from the package's layers, that adds base-3 numbers
-with every property of indrajala_ml/data/addition_data.py's catalogue, under
+with every property of indrajala_studies/addition_data.py's catalogue, under
 indrajala_studies/addition_study.py's harness.
 
     python scripts/studies/addition_study.py run CONFIG.json
@@ -107,9 +107,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from indrajala_ml.data import addition_data as ad
 from indrajala_ml.measurement import machine_lock
 
+from indrajala_studies import addition_data as ad
 from indrajala_studies import addition_study as st
 
 

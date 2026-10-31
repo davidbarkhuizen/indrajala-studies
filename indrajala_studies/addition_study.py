@@ -40,8 +40,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
-from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data.addition_data import BASE, Triple
 from indrajala_ml.model.layers.array.array_backend import RUST
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
@@ -49,6 +47,9 @@ from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, La
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
 from indrajala_ml.studies.common import crate_hash, table
+
+from indrajala_studies import addition_data as ad
+from indrajala_studies.addition_data import BASE, Triple
 
 PASSING_SEEDS = 4  # D9: a size succeeds when this many of its seeds pass every property
 RETRIES = 1

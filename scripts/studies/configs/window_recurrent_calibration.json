@@ -1,0 +1,7 @@
+{
+ "directory": "data/window-recurrent/calibration",
+ "workers": 3,
+ "steps": 2,
+ "seeds": 1,
+ "matrix": [{"k": [1, 2, 4], "s": [16], "m": [16]}]
+}

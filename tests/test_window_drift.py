@@ -5,9 +5,9 @@ from collections.abc import Sequence
 
 import numpy as np
 import pytest
-from indrajala_ml.studies import window_tasks as wt
 
 from indrajala_studies import window_drift as wdr
+from indrajala_studies import window_tasks as wt
 
 ADDITION = wt.ADDITION
 

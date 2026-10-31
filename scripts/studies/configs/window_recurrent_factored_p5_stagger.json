@@ -1,0 +1,14 @@
+{
+ "directory": "data/window-recurrent/factored-p5-stagger",
+ "workers": 6,
+ "task": "modular-division-5",
+ "tests_past_break": false,
+ "seeds": 6,
+ "steps": 4120,
+ "certify_steps": true,
+ "stop_at_certified": true,
+ "budget_hours": 4,
+ "matrix": [
+  {"arm": "curriculum", "k": [1], "factors": [[16, 16], [16, 16], [16, 16]], "reads": "before_state", "stagger": 0.1}
+ ]
+}

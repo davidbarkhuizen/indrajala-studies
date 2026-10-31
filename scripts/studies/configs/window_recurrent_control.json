@@ -1,0 +1,9 @@
+{
+ "directory": "data/window-recurrent/control",
+ "workers": 6,
+ "tests_past_break": false,
+ "matrix": [
+  {"arm": "all-at-once", "k": [1], "s": [16], "m": [8]},
+  {"arm": "all-at-once", "k": [4], "s": [4, 16], "m": [16]}
+ ]
+}

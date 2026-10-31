@@ -1,0 +1,9 @@
+{
+ "directory": "data/window-recurrent/e2",
+ "workers": 6,
+ "seeds": 20,
+ "tests_past_break": false,
+ "matrix": [
+  {"arm": "curriculum", "k": [4], "s": [4], "m": [null]}
+ ]
+}

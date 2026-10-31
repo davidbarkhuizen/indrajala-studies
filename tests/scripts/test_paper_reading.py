@@ -5,7 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "paper"))
 import paper_reading as script  # scripts/ isn't a package
-from indrajala_ml.batch import BACKDROPS
+
+from indrajala_studies.batch import BACKDROPS
 
 
 def test_networks_are_found_where_each_backdrop_logs(tmp_path: Path) -> None:

@@ -6,10 +6,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data.addition_data import Triple
 
+from indrajala_studies import addition_data as ad
 from indrajala_studies import addition_study as st
+from indrajala_studies.addition_data import Triple
 from tests.addition_adders import correct, no_carry
 
 # fast settings: few cases per epoch and per screen; n = 2 keeps every catalogue run small

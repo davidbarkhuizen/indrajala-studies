@@ -1,8 +1,8 @@
 """
 The window-recurrent adder (the window-recurrent adder workplan): whether a network that reads a
 window of k columns and hands a snapped state from window to window learns, through a curriculum of
-window counts, to add base-3 numbers of any length, under indrajala_ml/studies/window_recurrent_study.py's
-harness and indrajala_ml/data/addition_data.py's catalogue.
+window counts, to add base-3 numbers of any length, under indrajala_studies/window_recurrent_study.py's
+harness and indrajala_studies/addition_data.py's catalogue.
 
     python scripts/studies/window_recurrent_study.py run CONFIG.json [--workers W] [--arm ARM]
     python scripts/studies/window_recurrent_study.py status CONFIG.json
@@ -24,7 +24,7 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
 docstring), its task among them (addition by default, or modular-division-5 or -7:
-indrajala_ml/studies/window_tasks.py). `run` resumes from what is on disk, a run from its last saved step, and prints a line
+indrajala_studies/window_tasks.py). `run` resumes from what is on disk, a run from its last saved step, and prints a line
 per finished run, then the report; it holds the machine lock, as every study. `--arm` runs one arm's
 runs only (a study's arms split between machines; keys and directory unchanged). `check` loads a saved
 step's network and runs its task's catalogue (without the held-out property, B3 or U2) at each
@@ -34,7 +34,7 @@ indrajala-research/docs/research-notes/window-recurrent-report.md, D9) as given.
 networks and W processes (at 128, 256 and 1,024 by default, the stratified distances doubling), each
 network's results as DIR/<run>-step-<j>.json (`check --json`'s), a network already there skipped,
 a line each of its cases and failures. `certify` writes each saved network's
-certificate against its task's machine (indrajala_ml/studies/window_recurrent_certificate.py) as
+certificate against its task's machine (indrajala_studies/window_recurrent_certificate.py) as
 DIR/<run>-<step>.json and prints a line for each, over W processes; --snap-ratio 1 certifies the
 network's own snaps only, branching no near tie (strict, D3 as first written). `compare` is C0's check
 (the claims workplan): every run in both study directories, its result without timings and
@@ -51,7 +51,7 @@ network's `check --json` as <run>-step-<j>.json), per class the networks tested 
 --epochs at each of --steps (default 8 and the last), each epoch's training and screen seconds, the
 whole check at the last step's longest length, a certificate for a snapped state, and the process's
 peak memory after each (measurement.md, section 2: size workers from it and from results' peak_mb).
-`diagnose` is what each saved step's network carries (indrajala_ml/studies/window_diagnostics.py):
+`diagnose` is what each saved step's network carries (indrajala_studies/window_diagnostics.py):
 its accuracy per answer class and each factor's share of each of the target's coordinates, their
 zero tests and the answer, written as step-<j>.diagnosis.json beside the network and printed a line
 each, a step already diagnosed skipped; --follow keeps diagnosing each new step as it is saved
@@ -62,7 +62,7 @@ moves from where it sat early on (indrajala_studies/window_drift.py): over the c
 first --cases at --n, the wrong digits by position (--bins equal bins) and by the target's state
 entering and leaving the column, and per target state each bin's state centroid's shift from
 the first bin's and its spread, beside the separation of the first bin's centroids. No lock; one core.
-`replay` is a step replayed from a saved network (ml's indrajala_ml/studies/window_replay.py,
+`replay` is a step replayed from a saved network (ml's indrajala_studies/window_replay.py,
 the snap wall workplan, retired: git show 53d7fef:docs/workplans/snap-wall-workplan.md): --epochs of --step's data of --run in --config, each epoch drawn by
 --generator; per batch the loss before and after and the update's norm, per epoch the screen, the
 certificate in both verdicts and the code margins (the least snap ratio; per snapped factor the
@@ -679,17 +679,17 @@ import time
 from pathlib import Path
 from typing import Any
 
-from indrajala_ml.data import addition_data as ad
 from indrajala_ml.measurement import machine_lock
 from indrajala_ml.model.layers.numpy.recurrent_array_layer import WALL_RATIO
 from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.studies import window_diagnostics as wd
-from indrajala_ml.studies import window_recurrent_certificate as wc
-from indrajala_ml.studies import window_recurrent_study as wr
-from indrajala_ml.studies import window_replay as wrp
-from indrajala_ml.studies import window_tasks as wt
 
+from indrajala_studies import addition_data as ad
+from indrajala_studies import window_diagnostics as wd
 from indrajala_studies import window_drift as wdr
+from indrajala_studies import window_recurrent_certificate as wc
+from indrajala_studies import window_recurrent_study as wr
+from indrajala_studies import window_replay as wrp
+from indrajala_studies import window_tasks as wt
 
 
 def main(argv: list[str]) -> int:
