@@ -1,7 +1,6 @@
 """
 The test doubles these tests share with ml's, copied (the studies-repo workplan, D5) from ml at
-ba5fa14: CarryTable from tests/studies/helpers.py, CarryMachine and TaskMachine from
-tests/studies/test_window_recurrent_certificate.py.
+ba5fa14: CarryMachine and TaskMachine from tests/studies/test_window_recurrent_certificate.py.
 """
 
 import math
@@ -10,37 +9,8 @@ import numpy as np
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_tasks as wt
 
-ADDITION = wt.ADDITION
 ALL_TWOS = 26  # the column token of digits (2, 2, 2): column sum 6
 NEAR = 1.01  # a distance ratio inside SNAP_RATIO
-
-
-class CarryTable:
-    """The carry machine at k 1 as a WindowMachine, with flip (state, window) handing on the next carry instead."""
-
-    def __init__(self, flip: tuple[int, int] | None = None) -> None:
-        self.flip = flip
-
-    @property
-    def columns(self) -> int:
-        return 1
-
-    @property
-    def codes(self) -> list[int]:
-        return [3]
-
-    def start(self) -> tuple[tuple[int, ...], list[np.ndarray]]:
-        return (0,), [np.array([0.0, 1.0, 1.0])]
-
-    def step(self, state: tuple[int, ...], windows: np.ndarray) -> wc.Steps:
-        (carry,) = state
-        labels, after = ADDITION.machine.windows(windows)
-        digits, nexts = labels[carry], after[carry].copy()
-        if self.flip is not None and self.flip[0] == carry:
-            nexts[windows[:, 0] == self.flip[1]] = (nexts[windows[:, 0] == self.flip[1]] + 1) % 3
-        distances = np.ones((len(windows), 3))
-        distances[np.arange(len(windows)), nexts] = 0.0
-        return wc.Steps(digits, np.full(digits.shape, 5.0), nexts[:, np.newaxis], [distances])
 
 
 class CarryMachine:
