@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+option="${1:-}"
+
+venv_root=".venv"
+# indrajala-ml, a git submodule (the studies-repo workplan's D2): installed editable into this
+# venv, with its own pinned dependencies; the crate is built from its own submodule, ml/rust.
+ml_root="ml"
+rust_crate_root="$ml_root/rust"
+# The same pins as ml's ./cli (the workplan's D6): a bump in ml is mirrored here in the next
+# "Bump ml/" PR.
+maturin_version="1.15.0"
+ruff_version="0.16.9"
+pyright_version="1.1.414"
+
+clean () {
+
+    rm -rf .pytest_cache
+    rm -rf indrajala_studies/__pycache__
+    rm -rf tests/__pycache__
+}
+
+create_venv () {
+
+    echo "creating virtual environment @ $venv_root ..."
+    python3 -m venv "$venv_root"
+    echo "... created virtual environment @ $venv_root"
+}
+
+init_submodules () {
+
+    echo "initializing git submodules ..."
+    git submodule update --init --recursive
+    echo "... initialized git submodules"
+}
+
+activate_venv () {
+
+    source "$venv_root/bin/activate"
+    echo "$(python --version) venv @ $(which python)"
+}
+
+deactivate_venv () {
+
+    deactivate
+}
+
+install_and_upgrade_pip () {
+
+    python -m pip install --upgrade pip
+    echo "$(python -m pip --version)"
+}
+
+install_python_modules () {
+
+    # ml's lock (its requirements.txt, whose `-e .` is ml itself) from inside ml/, then this
+    # package, whose one dependency, indrajala-ml, is then already met.
+    echo "installing python modules ..."
+    (cd "$ml_root" && python -m pip install -r requirements.txt)
+    python -m pip install --no-deps -e .
+    echo "... installed python modules"
+}
+
+install_lint_tools () {
+
+    echo "installing ruff and pyright ..."
+    python -m pip install "ruff==$ruff_version" "pyright==$pyright_version"
+    echo "... installed ruff and pyright"
+}
+
+install_maturin () {
+
+    echo "installing maturin ..."
+    python -m pip install "maturin==$maturin_version"
+    echo "... installed maturin"
+}
+
+require_rustup () {
+
+    if ! command -v rustup >/dev/null 2>&1; then
+        echo "rustup not found: install it from https://rustup.rs (ml/rust/rust-toolchain.toml pins the toolchain)" >&2
+        exit 1
+    fi
+}
+
+build_rust () {
+
+    require_rustup
+    echo "building $rust_crate_root ..."
+    (cd "$rust_crate_root" && maturin develop --release)
+    echo "... built $rust_crate_root"
+}
+
+install_rust_wheel () {
+
+    # $1: a wheel directory CI caches, keyed on ml/rust's commit, as ml's CI does. Empty
+    # directory (cache miss): build the wheel into it first.
+    local wheel_dir="$1"
+    if ! ls "$wheel_dir"/*.whl >/dev/null 2>&1; then
+        require_rustup
+        echo "building $rust_crate_root wheel into $wheel_dir ..."
+        local wheel_out
+        wheel_out="$(realpath -m "$wheel_dir")"
+        (cd "$rust_crate_root" && maturin build --release --out "$wheel_out")
+    fi
+    echo "installing $rust_crate_root wheel from $wheel_dir ..."
+    python -m pip install --force-reinstall --no-deps "$wheel_dir"/*.whl
+    echo "... installed $rust_crate_root wheel"
+}
+
+setup () {
+
+    # --rust-wheel-dir <dir> (CI): install the crate from a cached wheel instead of `maturin develop`.
+    local rust_wheel_dir=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --rust-wheel-dir) rust_wheel_dir="$2"; shift 2 ;;
+            *) usage; exit 1 ;;
+        esac
+    done
+
+    init_submodules
+    create_venv
+    activate_venv
+    install_and_upgrade_pip
+    install_python_modules
+    install_maturin
+    install_lint_tools
+    if [ -n "$rust_wheel_dir" ]; then
+        install_rust_wheel "$rust_wheel_dir"
+    else
+        build_rust
+    fi
+    deactivate_venv
+}
+
+run_tests () {
+
+    activate_venv
+    if [ "$#" -eq 0 ]; then
+        set -- tests/
+    fi
+    python3 -m pytest --verbose "$@"
+    deactivate_venv
+}
+
+lint () {
+
+    # the checks CI's lint job runs; `ruff check --fix . && ruff format .` applies the fixable ones.
+    activate_venv
+    ruff check .
+    ruff format --check .
+    pyright
+    deactivate_venv
+}
+
+usage () {
+    echo "usage: invoke [ clean | setup [--rust-wheel-dir <dir>] | build-rust | test [pytest-path ...] | lint ]"
+}
+
+case "$option" in
+
+    clean)
+        clean
+    ;;
+
+    setup)
+        shift
+        setup "$@"
+    ;;
+
+    build-rust)
+        activate_venv
+        build_rust
+        deactivate_venv
+    ;;
+
+    test)
+        shift
+        clean
+        run_tests "$@"
+    ;;
+
+    lint)
+        lint
+    ;;
+
+    *)
+        usage
+    ;;
+esac
