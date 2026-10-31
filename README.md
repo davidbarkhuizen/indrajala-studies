@@ -5,10 +5,23 @@ code, scripts, configs and tests, moved out of ml so the library carries less of
 runs. The findings, the papers and the research workplans are in
 [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research).
 
-It is a first step, not the whole split: the code moved is what nothing left in ml needs (ml's
-`docs/workplans/infrastructure/studies-repo-workplan.md`). The window-recurrent harness, its tasks,
-the certificate, `chow`, `window_replay` and the batch runner stay in ml for now, and so do the
-window-recurrent configs: run them from `ml/scripts/studies/configs/`.
+Since 2026-10-31 every piece of the window-recurrent research lives here (ml's research-separation
+workplan): the harness, its tasks and configs, the certificate, the readings, the modular family and
+its probe, the batch runner, and the addition and window-recurrent study scripts. ml keeps the
+library (the window-recurrent network and its window presets, `indrajala_ml/model/specs/window_presets.py`)
+and the primitive-era studies that validate its features.
+
+- `indrajala_studies/`: the modules (`window_recurrent_study`, `window_tasks`, `modular_family`,
+  `batch`, `addition_data`, ...).
+- `scripts/studies/`, `scripts/paper/`, `scripts/runner/`, `scripts/measurement/`, `scripts/data/`:
+  the command lines; `scripts/studies/configs/` the runs' configurations.
+- `docs/working-notes.md`: the gotchas of running and reading studies (ml's own notes cover git,
+  the machines and the shell).
+- `data/` (gitignored): every study's results and networks, with their manifests.
+
+**Timing:** ml's `ab.py` runs `scripts/measurement/window_study_timing.py` (the long test and a study
+run end to end) by its absolute path, each side's ml tree supplying the library:
+`ab.py remote --host jebel run --bench cmd ... -- /home/david/code/indrajala-studies/scripts/measurement/window_study_timing.py`.
 
 **Paper 1** is reproduced from the tags `paper1-v1` and `paper1-v1.1` in ml and the crate, where the
 paper's scripts still live under their old paths, and from its datapack
