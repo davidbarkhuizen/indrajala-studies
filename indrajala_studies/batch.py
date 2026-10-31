@@ -950,7 +950,7 @@ def code_paths(code: str) -> tuple[str, str]:
 # each host's clones (the research-separation plan, D6): a batch's worktree is a studies worktree at the
 # batch's commit, its ml submodule checked out from the host's own ml clone (no crate build: the batch's
 # crate comes from CRATE on PYTHONPATH)
-STUDIES_URL = "git@github.com:davidbarkhuizen/indrajala-studies.git"
+STUDIES_URL = "https://github.com/davidbarkhuizen/indrajala-studies.git"  # public: no key on the hosts
 CLONES = {"stone": ("~/labour/code/indrajala-studies", "~/labour/code/indrajala-ml")}
 DEFAULT_CLONES = ("~/code/indrajala-studies", "~/code/indrajala-ml")
 
