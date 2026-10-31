@@ -31,8 +31,11 @@ from pathlib import Path
 
 import indrajala_ml
 
-# window_recurrent_timing.py from the ml tree that supplies the library (scripts/ isn't a package)
+# window_recurrent_timing.py from the ml tree that supplies the library (scripts/ isn't a package);
+# this repository's root last, a fallback, for indrajala_studies under ab.py (only the ml tree on
+# PYTHONPATH there)
 sys.path.insert(0, str(Path(indrajala_ml.__path__[0]).parent / "scripts" / "measurement"))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 import window_recurrent_timing as timing
 
 DEFAULT_CASES = ["long-test-family-p7-f32-U1-n1024-c1023"]
