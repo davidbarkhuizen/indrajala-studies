@@ -25,9 +25,26 @@ from pathlib import Path
 from typing import Any
 
 FIELDS = [
-    "file", "network", "network_on_disk", "sha256", "verdict", "task", "columns", "codes", "reachable",
-    "minimised", "evaluations", "seconds", "snap_smallest", "snap_short", "lead_smallest", "lead_short",
-    "split_ties", "wrong_outputs", "wrong_states", "certified",
+    "file",
+    "network",
+    "network_on_disk",
+    "sha256",
+    "verdict",
+    "task",
+    "columns",
+    "codes",
+    "reachable",
+    "minimised",
+    "evaluations",
+    "seconds",
+    "snap_smallest",
+    "snap_short",
+    "lead_smallest",
+    "lead_short",
+    "split_ties",
+    "wrong_outputs",
+    "wrong_states",
+    "certified",
 ]
 
 
@@ -66,12 +83,11 @@ def rows(root: Path) -> list[dict[str, Any]]:
         try:
             with path.open() as f:
                 head = f.read(4096)
-            if '"reachable"' not in head and '"phi"' not in head and '"wrong_outputs"' not in head:
-                # a certificate's keys come early; skip networks, logs and reports cheaply
-                if '"snap_ratio"' not in head:
-                    continue
+            # a certificate's keys come early; skip networks, logs and reports cheaply
+            if not any(key in head for key in ('"reachable"', '"phi"', '"wrong_outputs"', '"snap_ratio"')):
+                continue
             d = json.loads(path.read_text())
-        except (OSError, ValueError, UnicodeDecodeError):
+        except OSError, ValueError, UnicodeDecodeError:
             continue
         if isinstance(d, dict) and "reachable" in d and "certified" in d:
             out.append(row(path, d, root))
@@ -88,8 +104,10 @@ def summary(table: list[dict[str, Any]]) -> str:
     lines = [
         f"certificate files: {len(table)}; distinct networks: {len(networks)}",
         f"certified strict: {len(by_verdict['strict'])}; tie-branched: {len(by_verdict['branched'])}; both: {len(both)}",
-        "per task, certified tie-branched (distinct networks): count, reachable min-max, minimised, "
-        "evaluations min-max, seconds min-max, smallest snap ratio, near ties max",
+        (
+            "per task, certified tie-branched (distinct networks): count, reachable min-max, minimised, "
+            "evaluations min-max, seconds min-max, smallest snap ratio, near ties max"
+        ),
     ]
     tasks: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for r in table:
@@ -98,7 +116,7 @@ def summary(table: list[dict[str, Any]]) -> str:
     for task, rs in sorted(tasks.items()):
         v = list(rs.values())
 
-        def span(k: str, fmt: str = "{}") -> str:
+        def span(k: str, fmt: str = "{}", v: list[dict[str, Any]] = v) -> str:
             xs = [x[k] for x in v if x[k] is not None]
             return f"{fmt.format(min(xs))}-{fmt.format(max(xs))}" if xs else "-"
 
