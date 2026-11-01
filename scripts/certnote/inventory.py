@@ -22,7 +22,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 FIELDS = [
     "file",
@@ -48,8 +48,13 @@ FIELDS = [
 ]
 
 
+def _margin(d: dict[str, Any], name: str) -> dict[str, Any]:
+    value: Any = d.get(name)
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
 def row(path: Path, d: dict[str, Any], root: Path) -> dict[str, Any]:
-    network = d.get("network") or ""
+    network: str = d.get("network") or ""
     on_disk = bool(network) and any(p.exists() for p in (Path(network), root.parent.parent / network, root / network))
     return {
         "file": str(path),
@@ -64,10 +69,10 @@ def row(path: Path, d: dict[str, Any], root: Path) -> dict[str, Any]:
         "minimised": len(d.get("minimised", [])),
         "evaluations": d.get("evaluations"),
         "seconds": d.get("seconds"),
-        "snap_smallest": (d.get("snap") or {}).get("smallest"),
-        "snap_short": (d.get("snap") or {}).get("short"),
-        "lead_smallest": (d.get("lead") or {}).get("smallest"),
-        "lead_short": (d.get("lead") or {}).get("short"),
+        "snap_smallest": _margin(d, "snap").get("smallest"),
+        "snap_short": _margin(d, "snap").get("short"),
+        "lead_smallest": _margin(d, "lead").get("smallest"),
+        "lead_short": _margin(d, "lead").get("short"),
         "split_ties": d.get("split_ties", 0),
         "wrong_outputs": d.get("wrong_outputs"),
         "wrong_states": d.get("wrong_states"),
@@ -76,7 +81,7 @@ def row(path: Path, d: dict[str, Any], root: Path) -> dict[str, Any]:
 
 
 def rows(root: Path) -> list[dict[str, Any]]:
-    out = []
+    out: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*.json")):
         if path.stat().st_size > 200_000_000:
             continue
@@ -86,11 +91,11 @@ def rows(root: Path) -> list[dict[str, Any]]:
             # a certificate's keys come early; skip networks, logs and reports cheaply
             if not any(key in head for key in ('"reachable"', '"phi"', '"wrong_outputs"', '"snap_ratio"')):
                 continue
-            d = json.loads(path.read_text())
+            d: Any = json.loads(path.read_text())
         except OSError, ValueError, UnicodeDecodeError:
             continue
         if isinstance(d, dict) and "reachable" in d and "certified" in d:
-            out.append(row(path, d, root))
+            out.append(row(path, cast(dict[str, Any], d), root))
     return out
 
 
@@ -129,7 +134,7 @@ def summary(table: list[dict[str, Any]]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("root", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
