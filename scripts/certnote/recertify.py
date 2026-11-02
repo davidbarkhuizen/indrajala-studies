@@ -246,7 +246,8 @@ def recertify(job: dict[str, Any], out: Path) -> dict[str, Any]:
         "near_ties": fresh["snap"]["short"],
         "split_ties": fresh.get("split_ties", 0),
         "evaluations": fresh["evaluations"],
-        "certify_seconds": certify_seconds,
+        "certify_seconds": certify_seconds,  # every encoding tried, for a family network
+        "seconds": fresh["seconds"],  # the emitted certificate's own search
         "check": report,
     }
 
