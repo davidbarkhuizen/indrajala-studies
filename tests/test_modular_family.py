@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from indrajala_ml.model.codes import kmeans
 from indrajala_ml.model.specs import window_presets as wp
 from indrajala_ml.model.specs.layer_specs import Attention, Branches, Dense, Residual
 
@@ -2391,12 +2392,12 @@ def test_kmeans_finds_separated_clusters_and_perturbs_the_codes_it_cant_fill():
     rng = np.random.default_rng(0)
     centres = np.array([[0.0, 0.0], [5.0, 5.0], [-5.0, 5.0]])
     points = np.concatenate([c + rng.normal(0.0, 0.1, size=(30, 2)) for c in centres])
-    found, nearest = mf.kmeans(points, 3, np.random.default_rng(1), 25)
+    found, nearest = kmeans(points, 3, np.random.default_rng(1), 25)
     rounded: list[list[float]] = np.round(found).tolist()
     assert sorted(rounded) == sorted(centres.tolist())
     assert len(set(nearest.tolist())) == 3
     # two distinct points, four codes: no two codes equal
-    few, _ = mf.kmeans(np.array([[0.0, 0.0], [1.0, 1.0]] * 5), 4, np.random.default_rng(2), 5)
+    few, _ = kmeans(np.array([[0.0, 0.0], [1.0, 1.0]] * 5), 4, np.random.default_rng(2), 5)
     gaps = np.sum((few[:, np.newaxis, :] - few[np.newaxis, :, :]) ** 2, axis=2)[np.triu_indices(4, 1)]
     assert gaps.min() > 0.0
 

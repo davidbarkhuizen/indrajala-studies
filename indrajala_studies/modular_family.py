@@ -46,6 +46,7 @@ from typing import Any, Protocol
 
 import numpy as np
 import numpy.typing as npt
+from indrajala_ml.model.codes import fit_codes
 from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.format2 import network_to_json
@@ -2871,33 +2872,6 @@ def code_groups(net: Any, temperatures: Sequence[float | None], kappa: float = 0
     return groups
 
 
-def kmeans(points: np.ndarray, k: int, rng: np.random.Generator, iterations: int) -> tuple[np.ndarray, np.ndarray]:
-    """
-    k centres of the points (n, d), k-means++ seeding then Lloyd's iterations, and each point's nearest
-    centre. A centre with no points (fewer distinct points than k) is a drawn point moved by a small
-    random step, so no two codes start equal (deterministic annealing's perturbation).
-    """
-    n = len(points)
-    centres = [points[int(rng.integers(n))]]
-    for _ in range(1, k):
-        d = np.min(np.sum((points[:, np.newaxis, :] - np.array(centres)[np.newaxis, :, :]) ** 2, axis=2), axis=1)
-        total = float(d.sum())
-        centres.append(points[int(rng.choice(n, p=d / total))] if total > 0 else points[int(rng.integers(n))])
-    C = np.array(centres, dtype=float)
-    scale = max(float(np.sqrt(np.var(points, axis=0).sum())), 1e-6)
-    for _ in range(iterations + 1):
-        nearest = np.argmin(np.sum((points[:, np.newaxis, :] - C[np.newaxis, :, :]) ** 2, axis=2), axis=1)
-        for j in range(k):
-            members = points[nearest == j]
-            C[j] = (
-                members.mean(axis=0)
-                if len(members)
-                else points[int(rng.integers(n))] + rng.normal(0.0, 1e-3 * scale, size=points.shape[1])
-            )
-    nearest = np.argmin(np.sum((points[:, np.newaxis, :] - C[np.newaxis, :, :]) ** 2, axis=2), axis=1)
-    return C, nearest
-
-
 def codes_from_states(
     net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], rng: np.random.Generator, iterations: int, hot: float
 ) -> list[dict[str, Any]]:
@@ -2909,26 +2883,22 @@ def codes_from_states(
     """
     spread = state_spread(net, rows)
     states = factor_states(net, rows)
+    # the codes by the library's k-means (ml's codes.py, the audit-remedies workplan's D3: this
+    # harness's kmeans ported bit for bit), every factor's before the melting curves, whose own
+    # generators leave k-means' draws untouched
+    fits = fit_codes(net, states, rng, iterations)
     made: list[dict[str, Any]] = []
-    for g, factor in enumerate(net.recurrence_layer.factors):
-        if factor.codes is None:
+    for g, (factor, fit) in enumerate(zip(net.recurrence_layer.factors, fits, strict=True)):
+        if factor.codes is None or fit is None:
             made.append({})
             continue
-        h = states[g]
-        melting = melting_curve(h, factor.codes.count, np.random.default_rng([g]))  # k-means' draws untouched
-        E, nearest = kmeans(h, factor.codes.count, rng, iterations)
-        within = np.zeros((h.shape[1], h.shape[1]))
-        for code in np.unique(nearest):
-            centred = h[nearest == code] - h[nearest == code].mean(axis=0)
-            within += centred.T @ centred
-        lam = float(np.linalg.eigvalsh(within / max(len(h) - 1, 1))[-1])
-        factor.codes.E = net.backend.matrix(E.tolist())
+        melting = melting_curve(states[g], factor.codes.count, np.random.default_rng([g]))
         made.append(
             {
                 "hot": hot * spread[g]["critical_temperature"],
-                "within_temperature": 2.0 * lam,
+                "within_temperature": 2.0 * fit.within_lambda_max,
                 "critical_temperature": spread[g]["critical_temperature"],
-                "in_use": len(np.unique(nearest)),
+                "in_use": fit.in_use,
                 "effective_dimension": spread[g]["effective_dimension"],
                 "melting_point": melting["melting_point"],
                 "transitions": melting["transitions"],
