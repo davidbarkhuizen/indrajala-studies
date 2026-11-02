@@ -212,7 +212,10 @@ def recertify(job: dict[str, Any], out: Path) -> dict[str, Any]:
         kept = None
         for encoding in candidates:
             tried += 1
-            fresh = mf.certify_file(network, encoding, job["task"], job["snap_ratio"])
+            try:
+                fresh = mf.certify_file(network, encoding, job["task"], job["snap_ratio"])
+            except ValueError:  # a query token outside the network's vocabulary: not its encoding
+                continue
             if stored is None or reproduces(fresh, stored):
                 matching += 1
                 kept = kept or encoding
