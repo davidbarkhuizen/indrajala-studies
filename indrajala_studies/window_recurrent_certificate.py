@@ -59,12 +59,22 @@ grouping's name, a linear form of the target's coordinates (window_tasks.Coordin
 
 A WindowMachine is what certify reads: WindowRecurrentShape's networks through NetworkMachine, or a
 stand-in (the tests').
+
+The witness (the certificate note's D5, indrajala-research docs/workplans/certificate-note-workplan.md):
+certify_table returns the certificate with its Table, the machine certify read: every reachable
+state's labels, snapped next state and margins under every window, each near tie's other next
+states, the start's, phi and the minimised machine's blocks. Table.save writes it as an npz with the
+claim it supports (meta: the task, the margins, the network's file and sha256, the adapter that
+made the network a WindowMachine), and scripts/certnote/certificate_check.py, which shares no code
+with this module, checks it: closure, phi a homomorphism onto the target, and every entry re-run
+through the network's forward pass. The trusted base is then that checker and the forward pass.
 """
 
 from __future__ import annotations
 
 import hashlib
 import itertools
+import json
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -307,6 +317,36 @@ class Certificate:
         return value
 
 
+@dataclass(frozen=True)
+class Table:
+    """
+    The machine certify read (the module's docstring, the witness): R reachable states in
+    breadth-first order (the certificate's reachable), W windows in all_windows' order, G factors,
+    k labels a window, B near-tie branches and S start states (the start, then its own near ties').
+    """
+
+    states: npt.NDArray[np.int16]  # (R, G)
+    labels: npt.NDArray[np.int8]  # (R, W, k)
+    next: npt.NDArray[np.int16]  # (R, W, G), the snapped next state
+    leads: FloatArray  # (R, W), the smallest logit lead over the window's labels
+    ratios: FloatArray  # (R, W), the smallest snap ratio over the factors
+    branch_rows: IntArray  # (B,), a near tie's state, as its row in states
+    branch_windows: IntArray  # (B,)
+    branch_next: npt.NDArray[np.int16]  # (B, G), the other next state
+    starts: npt.NDArray[np.int16]  # (S, G)
+    start_ratios: FloatArray  # (G,), the start's snap ratio per factor
+    phi: IntArray  # (R,), each state's target state
+    blocks: IntArray  # (R,), each state's block of the minimised machine
+
+    def arrays(self) -> dict[str, npt.NDArray[Any]]:
+        return {name: getattr(self, name) for name in self.__dataclass_fields__}
+
+    def save(self, path: Path, meta: Mapping[str, Any]) -> None:
+        """The table as a compressed npz, meta (JSON) under the key "meta"."""
+        savez: Any = np.savez_compressed  # its keyword arrays aren't typed apart from allow_pickle
+        savez(path, meta=np.array(json.dumps(dict(meta))), **self.arrays())
+
+
 class _Smallest:
     """The running minimum of a margin, its place, and the count under the tolerance."""
 
@@ -456,6 +496,16 @@ def certify(
     logit_lead: float = LOGIT_LEAD,
 ) -> Certificate:
     """The certificate of a machine against its task's (the module's docstring)."""
+    return certify_table(machine, task, snap_ratio, logit_lead)[0]
+
+
+def certify_table(
+    machine: WindowMachine,
+    task: wt.Task = wt.ADDITION,
+    snap_ratio: float = SNAP_RATIO,
+    logit_lead: float = LOGIT_LEAD,
+) -> tuple[Certificate, Table]:
+    """The certificate of a machine against its task's, with the table it read (the witness)."""
     begun = time.perf_counter()
     k = machine.columns
     target = task.machine
@@ -464,10 +514,12 @@ def certify(
     snap, lead = _Smallest(snap_ratio), _Smallest(logit_lead)
     start, start_distances = machine.start()
     near_start: list[npt.NDArray[np.bool_]] = []
+    start_ratios: list[float] = []
     for g, distances in enumerate(start_distances):
         ratios, near = snap_margins(np.array([start[g]]), distances[np.newaxis, :], snap_ratio)
         snap.add(ratios, start, None)
         near_start.append(near)
+        start_ratios.append(float(ratios[0]))
     _, start_rows = next_states(np.array([start], dtype=np.int64), near_start)
     starts = [_state(row) for row in start_rows]
     phi = dict.fromkeys(starts, target.start)
@@ -475,6 +527,8 @@ def certify(
     queue = list(starts)
     D: dict[State, npt.NDArray[np.int8]] = {}
     G: dict[State, npt.NDArray[np.int16]] = {}
+    leads: dict[State, FloatArray] = {}  # each window's smallest logit lead
+    ratios_of: dict[State, FloatArray] = {}  # each window's smallest snap ratio over the factors
     wrong_outputs = wrong_states = wrong_ties = 0
     branches: list[tuple[State, IntArray, IntArray]] = []  # each state's near ties' windows and next states
     first: tuple[str, State, int, State | None] | None = None  # kind, state, window, the next state that failed
@@ -484,15 +538,21 @@ def certify(
         D[q] = np.concatenate([p.digits for p in parts]).astype(np.int8)
         G[q] = np.concatenate([p.states for p in parts]).astype(np.int16)
         nears: list[list[npt.NDArray[np.bool_]]] = []
+        window_ratios: list[FloatArray] = []
         for i, p in enumerate(parts):
             batch = windows[i * BATCH : (i + 1) * BATCH]
             factor_near: list[npt.NDArray[np.bool_]] = []
+            smallest = np.full(len(batch), np.inf)
             for g, distances in enumerate(p.distances):
                 ratios, near = snap_margins(p.states[:, g], distances, snap_ratio)
                 snap.add(ratios, q, batch)
                 factor_near.append(near)
+                smallest = np.minimum(smallest, ratios)
             lead.add(p.leads.min(axis=1), q, batch)
             nears.append(factor_near)
+            window_ratios.append(smallest)
+        leads[q] = np.concatenate([p.leads.min(axis=1) for p in parts]).astype(np.float64)
+        ratios_of[q] = np.concatenate(window_ratios)
         near_by_factor = [np.concatenate([n[g] for n in nears]) for g in range(G[q].shape[1])]
         # every next state, (window, state), the snapped ones then the near ties', in window order
         next_windows, next_rows = next_states(G[q].astype(np.int64), near_by_factor)
@@ -542,7 +602,7 @@ def certify(
             after,
         )
     minimised = minimise(queue, D, G)
-    return Certificate(
+    certificate = Certificate(
         k,
         list(machine.codes),
         start,
@@ -561,6 +621,39 @@ def certify(
         task.name,
         None if counterexample is None else task.case_json(counterexample.columns()),
         split_ties(minimised, G, branches),
+    )
+    return certificate, _table(queue, D, G, leads, ratios_of, branches, starts, start_ratios, phi, minimised)
+
+
+def _table(
+    reachable: Sequence[State],
+    D: Mapping[State, npt.NDArray[np.int8]],
+    G: Mapping[State, npt.NDArray[np.int16]],
+    leads: Mapping[State, FloatArray],
+    ratios: Mapping[State, FloatArray],
+    branches: Sequence[tuple[State, IntArray, IntArray]],
+    starts: Sequence[State],
+    start_ratios: Sequence[float],
+    phi: Mapping[State, int],
+    minimised: Sequence[Sequence[State]],
+) -> Table:
+    """certify's dictionaries as the Table, rows in breadth-first order."""
+    row = {q: i for i, q in enumerate(reachable)}
+    block = {q: b for b, states in enumerate(minimised) for q in states}
+    factors = len(reachable[0])
+    return Table(
+        np.array(reachable, dtype=np.int16).reshape(-1, factors),
+        np.stack([D[q] for q in reachable]),
+        np.stack([G[q] for q in reachable]),
+        np.stack([leads[q] for q in reachable]),
+        np.stack([ratios[q] for q in reachable]),
+        np.concatenate([np.full(len(w), row[q], dtype=np.int64) for q, w, _ in branches] or [np.zeros(0, np.int64)]),
+        np.concatenate([w for _, w, _ in branches] or [np.zeros(0, np.int64)]).astype(np.int64),
+        np.concatenate([r for _, _, r in branches] or [np.zeros((0, factors), np.int64)]).astype(np.int16),
+        np.array(starts, dtype=np.int16).reshape(-1, factors),
+        np.array(start_ratios, dtype=np.float64),
+        np.array([phi[q] for q in reachable], dtype=np.int64),
+        np.array([block[q] for q in reachable], dtype=np.int64),
     )
 
 
@@ -584,16 +677,55 @@ def split_ties(
     return len(split)
 
 
-def certify_file(path: Path, task_name: str = wt.ADDITION.name, snap_ratio: float = SNAP_RATIO) -> dict[str, Any]:
+PLAIN: dict[str, Any] = {"kind": "plain"}  # a Table's adapter: the network is the WindowMachine, NetworkMachine
+
+
+def table_meta(
+    certificate: Certificate,
+    task: wt.Task,
+    snap_ratio: float,
+    network: Path,
+    sha256: str,
+    adapter: Mapping[str, Any] = PLAIN,
+    logit_lead: float = LOGIT_LEAD,
+) -> dict[str, Any]:
+    """
+    A Table's claim: what the checker needs besides the table. The adapter is how the network was
+    read as a WindowMachine: "plain" (NetworkMachine), or "query" (a family network's QueryMachine:
+    each one-column window run with its query_tokens after it, the slot's label read).
+    """
+    return {
+        "format": "certificate-table-1",
+        "task": task.name,
+        "columns": certificate.columns,
+        "tokens": task.machine.tokens,
+        "codes": certificate.codes,
+        "snap_ratio": snap_ratio,
+        "logit_lead": logit_lead,
+        "network": str(network),
+        "sha256": sha256,
+        "adapter": dict(adapter),
+        "certified": certificate.certified,
+    }
+
+
+def certify_file(
+    path: Path, task_name: str = wt.ADDITION.name, snap_ratio: float = SNAP_RATIO, emit: Path | None = None
+) -> dict[str, Any]:
     """
     A saved network's certificate against its task's machine as JSON, with the file's path, sha256
-    and snap ratio (1.0: strict, the network's own snaps only, no near tie branched).
+    and snap ratio (1.0: strict, the network's own snaps only, no near tie branched); with emit, its
+    Table written there too (the witness, D5).
     """
     network = load_network(str(path))
-    certificate = certify(NetworkMachine(network), wt.task_named(task_name), snap_ratio)
+    task = wt.task_named(task_name)
+    certificate, table = certify_table(NetworkMachine(network), task, snap_ratio)
+    sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    if emit is not None:
+        table.save(emit, table_meta(certificate, task, snap_ratio, path, sha256))
     return {
         "network": str(path),
-        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "sha256": sha256,
         "snap_ratio": snap_ratio,
         **certificate.to_json(),
     }
