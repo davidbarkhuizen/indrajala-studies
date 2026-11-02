@@ -499,3 +499,40 @@ def test_a_factored_networks_machine_is_its_forward_pass_window_by_window(networ
         assert tuple(digits) == tuple(want)
     certificate = wc.certify(machine)
     assert all(len(state) == 2 for state in certificate.reachable) and len(certificate.factors) == 2
+
+
+# C2 (the certificate note's stage 0 finding): the state handed on is its code's vector, bitwise
+
+
+@pytest.mark.parametrize("factored", [False, True], ids=["one factor", "two factors"])
+@pytest.mark.parametrize("network_class", [WindowRecurrentArrayNetwork, WindowRecurrentRustArrayNetwork])
+def test_full_sequence_inference_hands_on_each_codes_vector_bitwise(network_class: Any, factored: bool):
+    """
+    In the inference pass over whole sequences, each window's next state is exactly the codebook
+    row of each factor's code, and each window's outputs are bit for bit those of window_step from
+    those rows (the same batch): so the machine certify reads is the one inference runs.
+    """
+    k = 2
+    recurrence = (
+        WindowRecurrence((Factor(2, Codes(3)), Factor(3, Codes(4))), pooling=AttentionPooling(BEFORE_STATE))
+        if factored
+        else WindowRecurrence((Factor(4, Codes(4)),))
+    )
+    network: Any = network_class.randomized((k,), wr.window_specs(wt.ADDITION), recurrence, Adam(), seed=3)
+    E = [np.array(f.codes.E.tolist(), dtype=np.float64) for f in network.recurrence_layer.factors]
+    rows = np.random.default_rng(0).integers(0, 27, size=(64, 5 * k))
+    X = network.backend.matrix(rows.astype(float).tolist())
+    outputs, states, _ = network.window_states(X)
+    codes = network.state_codes(X)
+    outputs = np.array(outputs.tolist(), dtype=np.float64)
+    width = outputs.shape[1] // 5
+    for w in range(6):
+        handed = np.array(states[w].tolist(), dtype=np.float64)
+        rows_of_codes = np.stack([np.concatenate([E[g][c] for g, c in enumerate(row[w])]) for row in codes])
+        assert np.array_equal(handed, rows_of_codes), f"window {w}'s state isn't its codes' vectors"
+        if w == 5:
+            break
+        window = network.backend.matrix(rows[:, w * k : (w + 1) * k].astype(float).tolist())
+        output, _, after = network.window_step(window, network.backend.matrix(rows_of_codes.tolist()))
+        assert np.array_equal(np.array(output.tolist(), dtype=np.float64), outputs[:, w * width : (w + 1) * width])
+        assert after == [row[w + 1] for row in codes]

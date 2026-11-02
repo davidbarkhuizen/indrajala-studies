@@ -4323,14 +4323,24 @@ def slot(task_name: str) -> int:
     return SLOTS.get(task_name.rsplit("-", 1)[0], 0)
 
 
-def certify_file(path: Path, encoding: Target, task_name: str, snap_ratio: float = wc.SNAP_RATIO) -> dict[str, Any]:
-    """A saved family network's certificate, one slot against its task's machine, as certify_file's JSON."""
+def certify_file(
+    path: Path, encoding: Target, task_name: str, snap_ratio: float = wc.SNAP_RATIO, emit: Path | None = None
+) -> dict[str, Any]:
+    """
+    A saved family network's certificate, one slot against its task's machine, as certify_file's
+    JSON; with emit, its Table written there too (the witness, D5), its adapter the QueryMachine's.
+    """
     net = load_network(str(path))
     index = slot(task_name)
-    certificate = wc.certify(QueryMachine(net, encoding, index), wt.task_named(task_name), snap_ratio)
+    task = wt.task_named(task_name)
+    certificate, table = wc.certify_table(QueryMachine(net, encoding, index), task, snap_ratio)
+    sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    if emit is not None:
+        adapter = {"kind": "query", "query_tokens": list(encoding.query_tokens), "slot": index}
+        table.save(emit, wc.table_meta(certificate, task, snap_ratio, path, sha256, adapter))
     return {
         "network": str(path),
-        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "sha256": sha256,
         "slot": index,
         "snap_ratio": snap_ratio,
         **certificate.to_json(),
