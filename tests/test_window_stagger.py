@@ -78,7 +78,7 @@ def test_a_frozen_factor_keeps_its_weights_and_the_others_learn():
     assert any(not np.array_equal(a, b) for a, b in zip(before[0], after[0], strict=True))
     assert any(not np.array_equal(a, b) for a, b in zip(before[1], after[1], strict=True))
     assert any(not np.array_equal(a, b) for a, b in zip(window, weights(net, range(len(net.layers))), strict=True))
-    assert not isinstance(net.optimizer, wr.FactorRates)  # restored after the block
+    assert net.optimizer.learning_rate_scales == {}  # restored after the block
 
 
 def test_every_factor_at_the_rate_trains_as_the_network_alone():

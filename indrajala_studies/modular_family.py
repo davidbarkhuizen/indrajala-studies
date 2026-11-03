@@ -4080,9 +4080,9 @@ def guard_epoch(
     return result
 
 
-def readout_only(net: Any) -> wr.FactorRates:
+def readout_only(net: Any) -> dict[int, float]:
     """
-    The network's optimizer with every index at a rate of 0 but the answers' path: the output layer,
+    The rate scales (wr.rate_scales) with every index at a rate of 0 but the answers' path: the output layer,
     and with branches the answers' whole branch (the window branches workplan), the layers after the
     last factor's branch's end. The rest keep their weights, so the state (each pooling reads the
     output layer's input, or its branch's end) is the saved network's, and only the readout of its
@@ -4090,7 +4090,7 @@ def readout_only(net: Any) -> wr.FactorRates:
     """
     ends = [i for i, layer in enumerate(net.layers) if isinstance(layer, BranchArrayLayer | MergeArrayLayer)]
     learning = range(ends[-1] + 1 if ends else len(net.layers) - 1, len(net.layers))
-    return wr.FactorRates(net.optimizer, {i: 0.0 for i in range(len(net.layers) + len(net.parts)) if i not in learning})
+    return {i: 0.0 for i in range(len(net.layers) + len(net.parts)) if i not in learning}
 
 
 def tune_readout(
@@ -4120,11 +4120,8 @@ def tune_readout(
                 examples = [
                     encoding.example(encoding.draw(n, rng)) for n in epoch_lengths(step, settings.epoch_examples)
                 ]
-                inner, net.optimizer = net.optimizer, readout_only(net)
-                try:
+                with wr.rate_scales(net, readout_only(net)):
                     wr.train_epoch(net, examples, settings.batch_size, settings.rate, rng)
-                finally:
-                    net.optimizer = inner
             certificate = wc.certify(QueryMachine(net, encoding, index), task)
             rows.append(
                 {
