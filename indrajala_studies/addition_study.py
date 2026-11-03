@@ -301,7 +301,9 @@ def _regression_candidate(name: str, description: str, inputs: str) -> Candidate
     def build(n: int, size: Size, seed: int) -> Model:
         width = 3 * n if inputs == "digits" else 3
         return RegressionModel(
-            _network((width,), _dense_specs(size, Dense(1, output=True, loss="squared")), "single_output", seed), n, inputs
+            _network((width,), _dense_specs(size, Dense(1, output=True, loss="squared")), "single_output", seed),
+            n,
+            inputs,
         )
 
     def load(n: int, size: Size, directory: Path) -> Model:
