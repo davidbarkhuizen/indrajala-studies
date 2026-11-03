@@ -239,43 +239,28 @@ def factor_indices(network: Any) -> list[list[int]]:
     return indices
 
 
-class FactorRates:
-    """
-    The network's optimizer, each factor's parts stepped at its own fraction of the rate, every other
-    index at the rate. A fraction of 0 leaves the parts' weights as they are (each step still clears
-    their gradient and keeps Adam's moments current).
-    """
-
-    def __init__(self, inner: Any, scales: Mapping[int, float]) -> None:
-        self.inner, self.scales = inner, scales
-
-    @property
-    def rule(self) -> Any:
-        return self.inner.rule
-
-    def begin_step(self) -> None:
-        self.inner.begin_step()
-
-    def state(self) -> Any:
-        return self.inner.state()
-
-    def load_state(self, state: Any, /) -> None:
-        self.inner.load_state(state)
-
-    def apply(self, index: int, layer: Any, learning_rate: float, batch_size: int) -> None:
-        self.inner.apply(index, layer, learning_rate * self.scales.get(index, 1.0), batch_size)
-
-
 @contextlib.contextmanager
-def factor_rates(network: Any, rates: Sequence[float]) -> Generator[None]:
-    """The network trains with each factor at its fraction of the rate for as long as the block runs."""
-    scales = {i: rate for indices, rate in zip(factor_indices(network), rates, strict=True) for i in indices}
-    inner = network.optimizer
-    network.optimizer = FactorRates(inner, scales)
+def rate_scales(network: Any, scales: Mapping[int, float]) -> Generator[None]:
+    """
+    The network trains with each index in scales stepped at its fraction of the rate, every other
+    index at the rate, for as long as the block runs: the optimizer's learning_rate_scales
+    (indrajala-ml's audit-remedies workplan, D5), set and then restored. A fraction of 0 leaves the
+    parts' weights as they are (each step still clears their gradient and keeps Adam's moments
+    current).
+    """
+    optimizer = network.optimizer
+    before = optimizer.learning_rate_scales
+    optimizer.learning_rate_scales = dict(scales)
     try:
         yield
     finally:
-        network.optimizer = inner
+        optimizer.learning_rate_scales = before
+
+
+def factor_rates(network: Any, rates: Sequence[float]) -> contextlib.AbstractContextManager[None]:
+    """The network trains with each factor at its fraction of the rate for as long as the block runs."""
+    scales = {i: rate for indices, rate in zip(factor_indices(network), rates, strict=True) for i in indices}
+    return rate_scales(network, scales)
 
 
 class WindowModel:
