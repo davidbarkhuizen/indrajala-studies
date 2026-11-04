@@ -1001,6 +1001,7 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.measurement.worker_threads import worker_threads
 from indrajala_ml.model.specs import window_presets as wp
 
 from indrajala_studies import chow, inference
@@ -2062,9 +2063,8 @@ def main(argv: list[str]) -> int:
         jobs = [(name, s, guard) for s in seeds for name in names for guard in guards]
         jobs += [(name, s, guard) for name, s in chosen for guard in guards]
         context = multiprocessing.get_context("forkserver")
-        with concurrent.futures.ProcessPoolExecutor(
-            min(args.workers or len(jobs), len(jobs)), mp_context=context
-        ) as pool:
+        workers = min(args.workers or len(jobs), len(jobs))
+        with concurrent.futures.ProcessPoolExecutor(workers, mp_context=context, **worker_threads(workers)) as pool:
             runs: dict[concurrent.futures.Future[str], str] = {}
             for name, s, guard in jobs:
                 out = args.out / folders[name] if len(names) > 1 else args.out

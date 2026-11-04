@@ -38,6 +38,7 @@ with (out / "log.jsonl").open("w") as log:
         if end != "epoch":
             break
 print(f"seed {seed}: step {step}, {end}")
+print("threads", os.environ.get("INDRAJALA_THREADS"))
 """
 
 
@@ -689,6 +690,17 @@ def test_an_attempt_run_again_gets_a_fresh_directory_its_old_one_set_aside(tmp_p
     assert (root / "lost" / "s3-1-2" / "mark").read_text() == "2" and not (root / "s3-1" / "mark").exists()
     assert (root / "s3-1" / "seed1" / "log.jsonl").exists()
     assert not worker(tmp_path, "w", 1).running  # the set-aside directories are never adopted
+
+
+@pytest.mark.parametrize(("env", "expected"), [(None, "1"), ({"INDRAJALA_THREADS": "4"}, "4")])
+def test_an_attempt_runs_on_one_thread_unless_its_worker_declares_more(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, env: dict[str, str] | None, expected: str
+):
+    monkeypatch.delenv("INDRAJALA_THREADS", raising=False)
+    running = worker(tmp_path, "w", 1, env).launch(b.Attempt("s3-1", "continuous", "s3", 1))
+    while b.alive(running.pid):
+        time.sleep(0.05)
+    assert f"threads {expected}" in (tmp_path / "w" / "s3-1" / "run.out").read_text()
 
 
 def test_an_attempts_pss_follows_a_wrappers_setsid_child_and_its_workers(tmp_path: Path):

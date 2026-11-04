@@ -47,6 +47,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import certificate_check as cc  # scripts/ isn't a package
+from indrajala_ml.measurement.worker_threads import worker_threads
 
 STRICT, BRANCHED = 1.0, 1.05  # the two verdicts' snap ratios (window_recurrent_certificate.SNAP_RATIO)
 E6 = "e6-linear"
@@ -267,7 +268,7 @@ def run(jobs_file: Path, out: Path, workers: int, only_columns: int | None, limi
     print(f"{len(todo)} jobs to run ({len(done)} done)", flush=True)
     failures = 0
     context = multiprocessing.get_context("forkserver")
-    with concurrent.futures.ProcessPoolExecutor(workers, mp_context=context) as pool:
+    with concurrent.futures.ProcessPoolExecutor(workers, mp_context=context, **worker_threads(workers)) as pool:
         futures = {pool.submit(recertify, job, out): job for job in todo}
         for future in concurrent.futures.as_completed(futures):
             job = futures[future]
