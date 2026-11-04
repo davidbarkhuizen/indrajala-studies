@@ -66,6 +66,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+from indrajala_ml.measurement.worker_threads import worker_threads
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import (
@@ -1262,7 +1263,9 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
             continue
         assert study.train is train_run, "worker processes run train_run; workers=0 for another"
         context = multiprocessing.get_context("forkserver")
-        with concurrent.futures.ProcessPoolExecutor(study.workers, mp_context=context) as pool:
+        with concurrent.futures.ProcessPoolExecutor(
+            study.workers, mp_context=context, **worker_threads(study.workers)
+        ) as pool:
             futures = {pool.submit(_run_job, spec, study.directory, study.settings): spec for spec in pending}
             for future in concurrent.futures.as_completed(futures):
                 spec = futures[future]

@@ -680,6 +680,7 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.measurement.worker_threads import worker_threads
 from indrajala_ml.model.layers.numpy.recurrent_array_layer import WALL_RATIO
 from indrajala_ml.model.persistence.load_network import load_network
 
@@ -805,7 +806,9 @@ def main(argv: list[str]) -> int:
     if args.command == "long-test":
         args.out.mkdir(parents=True, exist_ok=True)
         context = multiprocessing.get_context("forkserver")
-        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
+        with concurrent.futures.ProcessPoolExecutor(
+            args.workers, mp_context=context, **worker_threads(args.workers)
+        ) as pool:
             test = functools.partial(
                 wr.long_test_file, out=args.out, task_name=args.task, lengths=args.n, properties=args.properties
             )
@@ -816,7 +819,9 @@ def main(argv: list[str]) -> int:
         if args.out is not None:
             args.out.mkdir(parents=True, exist_ok=True)
         context = multiprocessing.get_context("forkserver")
-        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
+        with concurrent.futures.ProcessPoolExecutor(
+            args.workers, mp_context=context, **worker_threads(args.workers)
+        ) as pool:
             for path, result in zip(
                 args.networks,
                 pool.map(
@@ -877,7 +882,9 @@ def main(argv: list[str]) -> int:
     if args.command == "explore":
         context = multiprocessing.get_context("forkserver")
         explored: list[dict[str, Any]] = []
-        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
+        with concurrent.futures.ProcessPoolExecutor(
+            args.workers, mp_context=context, **worker_threads(args.workers)
+        ) as pool:
             for config in args.config:
                 pooled = wr.load_config(config)
                 for run in pool.map(functools.partial(wr.explore_run, pooled, lengths=args.n), pooled.runs):

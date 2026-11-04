@@ -830,6 +830,7 @@ class Worker:
             directory.rename(lost / f"{attempt.id}-{sum(1 for _ in lost.glob(f'{attempt.id}-*')) + 1}")
         directory.mkdir(parents=True)
         env = {
+            "INDRAJALA_THREADS": "1",  # a slot is a core; the environment or `env` declares more (ml's D4)
             **os.environ,
             **self.env,
             "OPENBLAS_NUM_THREADS": "1",

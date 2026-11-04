@@ -33,6 +33,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from indrajala_ml.measurement.worker_threads import checked_threads
+
 from indrajala_studies import batch as b
 
 PORT = 47111
@@ -138,6 +140,7 @@ def main(argv: list[str]) -> int:
         asyncio.run(controller.serve(args.port))
         print("\n".join(b.report(args.dir)))
     elif args.command == "worker":
+        checked_threads(args.slots)  # refuses slots x threads past this host's CPUs
         worker = b.Worker(
             args.root,
             args.slots,

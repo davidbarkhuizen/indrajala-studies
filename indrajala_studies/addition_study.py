@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
+from indrajala_ml.measurement.worker_threads import worker_threads
 from indrajala_ml.model.layers.array.array_backend import RUST
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
@@ -659,7 +660,9 @@ def run(sweep: Sweep, log: Callable[[str], None] = print) -> dict[str, dict[str,
         return results
     assert sweep.candidates is CANDIDATES, "worker processes run the module's candidates; workers=0 for others"
     context = multiprocessing.get_context("forkserver")
-    with concurrent.futures.ProcessPoolExecutor(sweep.workers, mp_context=context) as pool:
+    with concurrent.futures.ProcessPoolExecutor(
+        sweep.workers, mp_context=context, **worker_threads(sweep.workers)
+    ) as pool:
         running: dict[concurrent.futures.Future[dict[str, Any]], RunSpec] = {}
         while True:
             for spec in pending(set(running.values()))[: sweep.workers - len(running)]:
