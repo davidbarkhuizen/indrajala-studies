@@ -19,7 +19,7 @@ The structure (no network needed):
 - labels: each entry's labels are the target's from phi(state) under the window;
 - next: phi of each next state (snapped and branched) is the target's state after the window;
 - lead: every entry's logit lead is at least the meta's;
-- onto: phi reaches every reachable target state (the target is minimal, so the minimised
+- onto: phi reaches every target state reachable by whole windows (the target is minimal, so the minimised
   machine is the target's size);
 - blocks: the recorded minimised machine is phi's kernel (phi a homomorphism onto a minimal target
   makes the kernel the coarsest congruence).
@@ -112,13 +112,14 @@ def target_windows(
     return labels, after
 
 
-def target_reachable(transition: npt.NDArray[np.int64], start: int) -> set[int]:
+def target_reachable(after: npt.NDArray[np.int64], start: int) -> set[int]:
+    """The states a table of next states (a state's row, per token or per window) reaches from the start."""
     seen, queue = {start}, [start]
     for s in queue:
-        for r in transition[s]:
-            if int(r) not in seen:
-                seen.add(int(r))
-                queue.append(int(r))
+        for r in np.unique(after[s]).tolist():
+            if r not in seen:
+                seen.add(r)
+                queue.append(r)
     return seen
 
 
@@ -188,8 +189,8 @@ def check_structure(meta: dict[str, Any], a: Arrays, transition: Any, output: An
             known_b & (phi[np.where(known_b, branch_rows, 0)] != want_after[phi[a["branch_rows"]], a["branch_windows"]])
         ).sum()
     )
-    fails["lead"] = int((a["leads"] < meta["logit_lead"]).sum())
-    fails["onto"] = len(target_reachable(transition, start) - {int(s) for s in phi})
+    fails["lead"] = int((~(a["leads"] >= meta["logit_lead"])).sum())  # so a NaN fails
+    fails["onto"] = len(target_reachable(want_after, start) - {int(s) for s in phi})  # over whole windows
     # the blocks as a partition against phi's kernel: the same partition when each block has one phi
     # value and each phi value one block
     pairs = set(zip(a["blocks"].tolist(), phi.tolist(), strict=True))
@@ -289,7 +290,7 @@ def check_fidelity(
         r, w = e // len(W), e % len(W)
         labels, lead, snapped, ratios, near = forward.run(a["states"][r], W[w])
         fails["labels"] += int((labels != a["labels"][r, w]).any(axis=1).sum())
-        fails["lead"] += int((lead < meta["logit_lead"]).sum())
+        fails["lead"] += int((~(lead >= meta["logit_lead"])).sum())  # so a NaN fails
         finite = np.isfinite(lead) & np.isfinite(a["leads"][r, w])
         lead_diff = max(lead_diff, float(np.abs(lead - a["leads"][r, w])[finite].max(initial=0.0)))
         finite = np.isfinite(ratios) & np.isfinite(a["ratios"][r, w])
