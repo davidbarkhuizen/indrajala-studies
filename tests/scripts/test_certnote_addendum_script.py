@@ -57,3 +57,35 @@ def test_a_changed_archive_or_a_missing_entry_fails_the_check(root: Path, tmp_pa
     with (out / "certnote-results.tar.gz").open("ab") as f:
         f.write(b"x")
     assert not ca.check(out)
+
+
+def test_a_split_addendum_checks_and_its_parts_rejoin_to_the_whole(root: Path, tmp_path: Path):
+    # the parts' size shrunk so every archive splits; the README replaced, its line with it
+    out = tmp_path / "out"
+    readme = tmp_path / "readme.md"
+    readme.write_text("read me")
+    ca.build(root, out, readme)
+    before = (out / "MANIFEST.sha256").read_text().splitlines()
+    wholes = {p.name: p.read_bytes() for p in out.glob("*.tar.gz")}
+    readme.write_text("read me, then cat the parts")
+    ca.split(out, readme, part=64)
+
+    assert not list(out.glob("*.tar.gz"))
+    for name, data in wholes.items():
+        parts = sorted(out.glob(f"{name}.part-*"))
+        assert len(parts) > 1 and b"".join(p.read_bytes() for p in parts) == data
+        assert (out / "whole" / name).read_bytes() == data
+    after = (out / "MANIFEST.sha256").read_text().splitlines()
+    assert [line for line in after if "README.md" not in line and ".part-" not in line] == [
+        line for line in before if "README.md" not in line
+    ]
+    assert len([line for line in after if ".part-" in line]) == len(list(out.glob("*.part-*")))
+    assert (out / "README.md").read_text() == "read me, then cat the parts"
+    assert ca.check(out)
+
+    # as a reader downloads it: the parts alone, no whole/
+    for path in (out / "whole").iterdir():
+        path.unlink()
+    assert ca.check(out)
+    min(out.glob("certnote-tables.tar.gz.part-*")).write_bytes(b"x")
+    assert not ca.check(out)
