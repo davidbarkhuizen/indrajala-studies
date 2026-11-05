@@ -4,8 +4,8 @@ The certificate note's tables and numbers regenerated from its result files (ind
 docs/workplans/certificate-note-workplan.md, D11): no number in the note is typed by hand.
 
 The data directory (`--data`, default data/certificate-note) holds stage 0's inventory.csv and the
-stages' JSON lines: recertify/results.jsonl (stage 1), faults/faults.jsonl (stage 2) and
-bound/bound.jsonl (stage 3), with manifest.sha256 (sha256sum's format, paths relative to the
+stages' JSON lines: recertify/results.jsonl (stage 1), faults/faults.jsonl (stage 2),
+bound/bound.jsonl (stage 3) and affine/affine.jsonl (D13), with manifest.sha256 (sha256sum's format, paths relative to the
 directory) listing them; every command first checks the files against the manifest.
 
     certificate_note_tables.py show NAME...     a table's LaTeX rows
@@ -34,7 +34,14 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "certnote"))
 import certificate_cost as ccost  # scripts/ isn't a package
 
-FILES = ("inventory.csv", "recertify/results.jsonl", "faults/faults.jsonl", "bound/bound.jsonl")
+FILES = (
+    "inventory.csv",
+    "recertify/results.jsonl",
+    "faults/faults.jsonl",
+    "bound/bound.jsonl",
+    "affine/affine.jsonl",
+)
+LINEAR = "curriculum-linear"  # the linear-window networks' files (D9)
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 Numbers = dict[str, str]
 
@@ -98,6 +105,11 @@ def recertify_table(data: Path) -> list[str]:
     return rows
 
 
+def decided(r: dict[str, Any]) -> bool:
+    """A bound's table whose every label is sound and every snap sound or among the table's branches."""
+    return r["labels_sound"] == r["entries"] and r["snaps_sound"] + r["snaps_covered"] == r["entries"]
+
+
 def faults_table(data: Path) -> list[str]:
     """Per family: faults planted and caught, counterexample lengths, and the catalogue's worst miss by rank."""
     rows: list[str] = []
@@ -123,8 +135,9 @@ def miss_cell(p: float) -> str:
 
 
 def bound_table(data: Path) -> list[str]:
-    """Per family: tables bounded, the shares of labels and snaps the bound decides, and the float values outside."""
+    """Per family: the interval bound's tables, whole tables and shares; then the affine bound's on the rest."""
     rows: list[str] = []
+    affine = by_family(lines(data / "affine" / "affine.jsonl"), lambda r: r["task"])
     for family, rs in by_family(
         [r for r in lines(data / "bound" / "bound.jsonl") if "unsupported" not in r], lambda r: r["task"]
     ).items():
@@ -132,13 +145,12 @@ def bound_table(data: Path) -> list[str]:
         labels = sum(r["labels_sound"] for r in rs) / entries
         snaps = sum(r["snaps_sound"] for r in rs) / entries
         covered = sum(r["snaps_covered"] for r in rs) / entries
-        full = sum(
-            r["labels_sound"] == r["entries"] and r["snaps_sound"] + r["snaps_covered"] == r["entries"] for r in rs
-        )
-        outside = sum(r["outside"] for r in rs)
+        full = sum(decided(r) for r in rs)
+        rest = affine.get(family, [])
+        outside = sum(r["outside"] for r in [*rs, *rest])
         rows.append(
             f"{name(family)} & {len(rs)} & {full} & {100 * labels:.1f} & {100 * snaps:.1f} & {100 * covered:.1f} & "
-            f"{outside} \\\\"
+            f"{len(rest)} & {sum(decided(r) for r in rest)} & {outside} \\\\"
         )
     return rows
 
@@ -168,6 +180,7 @@ def recertify_numbers(data: Path) -> Numbers:
         "recert-jobs": grouped(len(rs)),
         "recert-networks": grouped(len({r["job"]["sha256"] for r in rs})),
         "recert-certified": grouped(len(certified)),
+        "recert-certified-networks": grouped(len({r["job"]["sha256"] for r in certified})),
         "recert-valid": grouped(sum(r["check"]["valid"] for r in certified)),
         "recert-uncertified": grouped(len(rs) - len(certified)),
         "recert-uncertified-invalid": grouped(sum(not r["check"]["valid"] for r in rs if not r["certified"])),
@@ -177,6 +190,7 @@ def recertify_numbers(data: Path) -> Numbers:
         "recert-moved": grouped(sum(r["check"]["differences"].get("snaps_moved", 0) for r in rs)),
         "recert-not-bitwise": grouped(sum(r["check"]["differences"].get("leads_not_bitwise", 0) for r in rs)),
         "recert-largest-entries": grouped(largest["check"]["entries"]),
+        "recert-largest-codes": grouped(largest["reachable"]),
         "recert-largest-check-minutes": f"{(largest['check']['fidelity_seconds'] + largest['check']['structure_seconds']) / 60:.0f}",
         "recert-largest-megabytes": f"{largest['check']['bytes'] / 1e6:.0f}",
         "recert-entries": grouped(sum(r["check"]["entries"] for r in rs)),
@@ -187,6 +201,7 @@ def fault_numbers(data: Path) -> Numbers:
     rs = lines(data / "faults" / "faults.jsonl")
     division = [r for r in rs if r["task"].startswith("modular-division-") and r["rank"] == "rarest"]
     likely = sum(r["catalogue_miss"] > 0.5 for r in rs)
+    wide = [r for r in rs if r["columns"] > 1]
     return {
         "faults": grouped(len(rs)),
         "fault-tables": grouped(len({r["table"] for r in rs})),
@@ -196,6 +211,11 @@ def fault_numbers(data: Path) -> Numbers:
         "faults-division-rarest": grouped(len(division)),
         "faults-division-rarest-missed": grouped(sum(r["catalogue_miss"] > 0.5 for r in division)),
         "fault-worst-miss": f"{max(r['catalogue_miss'] for r in rs):.5f}",
+        "faults-wide-missed": grouped(sum(r["catalogue_miss"] > 0.5 for r in wide)),
+        "faults-wide-median-missed": grouped(sum(r["catalogue_miss"] > 0.5 and r["rank"] == "median" for r in wide)),
+        "fault-wide-worst-common": miss_cell(
+            max((r["catalogue_miss"] for r in wide if r["rank"] == "commonest"), default=0.0)
+        ),
     }
 
 
@@ -203,7 +223,14 @@ def bound_numbers(data: Path) -> Numbers:
     rs = lines(data / "bound" / "bound.jsonl")
     bounded = [r for r in rs if "unsupported" not in r]
     entries = sum(r["entries"] for r in bounded)
+    networks = {r["job"]["id"].rsplit("-", 1)[0]: r for r in results(data) if r["certified"]}
+    reached = {Path(r["table"]).stem.rsplit("-", 1)[0] for r in rs}
+    left = [r for key, r in networks.items() if key not in reached]
     return {
+        "bound-networks": grouped(len(rs)),
+        "bound-left": grouped(len(left)),
+        "bound-left-long": grouped(sum(r["job"]["columns"] == 4 for r in left)),
+        "bound-long": grouped(sum(r["job"]["columns"] == 4 for key, r in networks.items() if key in reached)),
         "bound-tables": grouped(len(bounded)),
         "bound-unsupported": grouped(len(rs) - len(bounded)),
         "bound-entries": grouped(entries),
@@ -211,17 +238,61 @@ def bound_numbers(data: Path) -> Numbers:
         "bound-contradicted": grouped(sum(r["labels_contradicted"] for r in bounded)),
         "bound-labels-percent": f"{100 * sum(r['labels_sound'] for r in bounded) / entries:.1f}",
         "bound-snaps-percent": f"{100 * sum(r['snaps_sound'] + r['snaps_covered'] for r in bounded) / entries:.1f}",
-        "bound-full": grouped(
-            sum(
-                r["labels_sound"] == r["entries"] and r["snaps_sound"] + r["snaps_covered"] == r["entries"]
-                for r in bounded
-            )
-        ),
+        "bound-full": grouped(sum(decided(r) for r in bounded)),
         "bound-ulps": str(bounded[0]["ulps"]) if bounded else "--",
     }
 
 
-NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [inventory_numbers, recertify_numbers, fault_numbers, bound_numbers]
+def affine_numbers(data: Path) -> Numbers:
+    """The affine bound, and how it meets the interval bound: it is run on the tables the interval leaves undecided."""
+    rs = lines(data / "affine" / "affine.jsonl")
+    bounded = [r for r in lines(data / "bound" / "bound.jsonl") if "unsupported" not in r]
+    left = {r["table"] for r in bounded if not decided(r)}
+    ran = {r["table"] for r in rs}
+    return {
+        "affine-tables": grouped(len(rs)),
+        "affine-entries": grouped(sum(r["entries"] for r in rs)),
+        "affine-full": grouped(sum(decided(r) for r in rs)),
+        "affine-labels-undecided": grouped(sum(r["labels_undecided"] for r in rs)),
+        "affine-labels-contradicted": grouped(sum(r["labels_contradicted"] for r in rs)),
+        "affine-snaps-covered": grouped(sum(r["snaps_covered"] for r in rs)),
+        "affine-snaps-uncovered": grouped(sum(r["snaps_uncovered"] for r in rs)),
+        "affine-outside": grouped(sum(r["outside"] for r in rs)),
+        "affine-cap": grouped(max(r["cap"] for r in rs)),
+        "affine-capped-tables": grouped(sum(r["condensed"] > 0 for r in rs)),
+        "affine-longest-hours": f"{max(r['seconds'] for r in rs) / 3600:.0f}",
+        "affine-mismatch": grouped(len(left ^ ran)),
+        "bounds-decided": grouped(sum(decided(r) for r in bounded) + sum(decided(r) for r in rs)),
+    }
+
+
+def second_family_numbers(data: Path) -> Numbers:
+    """The linear-window networks (D9), named by their files' curriculum-linear: certificates and the interval bound.
+
+    Not by the job's e6 flag, which marks only the uncertified curriculum steps: the certified networks are
+    byte-identical to files of another directory, and the recertification keeps each network once.
+    """
+    jobs = [r for r in results(data) if LINEAR in r["job"]["network"]]
+    bounded = [r for r in lines(data / "bound" / "bound.jsonl") if "unsupported" not in r and LINEAR in r["network"]]
+    return {
+        "linear-jobs": grouped(len(jobs)),
+        "linear-networks": grouped(len({r["job"]["sha256"] for r in jobs})),
+        "linear-certified": grouped(sum(r["certified"] for r in jobs)),
+        "linear-valid": grouped(sum(r["check"]["valid"] for r in jobs)),
+        "linear-uncertified-invalid": grouped(sum(not r["check"]["valid"] for r in jobs if not r["certified"])),
+        "linear-bound-tables": grouped(len(bounded)),
+        "linear-bound-full": grouped(sum(decided(r) for r in bounded)),
+    }
+
+
+NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
+    inventory_numbers,
+    recertify_numbers,
+    fault_numbers,
+    bound_numbers,
+    affine_numbers,
+    second_family_numbers,
+]
 
 
 def numbers(data: Path) -> Numbers:
