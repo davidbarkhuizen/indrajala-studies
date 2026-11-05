@@ -180,6 +180,7 @@ def recertify_numbers(data: Path) -> Numbers:
         "recert-jobs": grouped(len(rs)),
         "recert-networks": grouped(len({r["job"]["sha256"] for r in rs})),
         "recert-certified": grouped(len(certified)),
+        "recert-certified-networks": grouped(len({r["job"]["sha256"] for r in certified})),
         "recert-valid": grouped(sum(r["check"]["valid"] for r in certified)),
         "recert-uncertified": grouped(len(rs) - len(certified)),
         "recert-uncertified-invalid": grouped(sum(not r["check"]["valid"] for r in rs if not r["certified"])),
@@ -222,7 +223,14 @@ def bound_numbers(data: Path) -> Numbers:
     rs = lines(data / "bound" / "bound.jsonl")
     bounded = [r for r in rs if "unsupported" not in r]
     entries = sum(r["entries"] for r in bounded)
+    networks = {r["job"]["id"].rsplit("-", 1)[0]: r for r in results(data) if r["certified"]}
+    reached = {Path(r["table"]).stem.rsplit("-", 1)[0] for r in rs}
+    left = [r for key, r in networks.items() if key not in reached]
     return {
+        "bound-networks": grouped(len(rs)),
+        "bound-left": grouped(len(left)),
+        "bound-left-long": grouped(sum(r["job"]["columns"] == 4 for r in left)),
+        "bound-long": grouped(sum(r["job"]["columns"] == 4 for key, r in networks.items() if key in reached)),
         "bound-tables": grouped(len(bounded)),
         "bound-unsupported": grouped(len(rs) - len(bounded)),
         "bound-entries": grouped(entries),

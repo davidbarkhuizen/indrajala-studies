@@ -107,6 +107,7 @@ def test_the_numbers_count_what_the_files_hold(data: Path):
         made["faults-caught"] == "3" and made["faults-likely-missed"] == "1" and made["fault-worst-miss"] == "0.70000"
     )
     assert made["bound-tables"] == "2" and made["bound-unsupported"] == "1" and made["bound-full"] == "1"
+    assert made["recert-certified-networks"] == "1" and made["bound-networks"] == "3" and made["bound-left"] == "1"
     assert made["affine-tables"] == "1" and made["affine-full"] == "1" and made["affine-capped-tables"] == "1"
     assert made["affine-mismatch"] == "0" and made["bounds-decided"] == "2" and made["affine-longest-hours"] == "2"
     assert made["linear-jobs"] == "1" and made["linear-certified"] == "1" and made["linear-bound-full"] == "1"
