@@ -112,9 +112,9 @@ def test_the_numbers_count_what_the_files_hold(data: Path):
     assert made["linear-jobs"] == "1" and made["linear-certified"] == "1" and made["linear-bound-full"] == "1"
 
 
-def test_a_table_the_interval_left_undecided_without_an_affine_run_is_a_mismatch(data: Path):
-    (data / "affine" / "affine.jsonl").write_text("")
-    assert cnt.affine_numbers(data)["affine-mismatch"] == "1"
+def test_an_affine_run_on_the_wrong_table_is_a_mismatch_both_ways(data: Path):
+    (data / "affine" / "affine.jsonl").write_text(json.dumps(affine("w")) + "\n")
+    assert cnt.affine_numbers(data)["affine-mismatch"] == "2"
 
 
 def test_the_bound_table_reads_both_bounds(data: Path):
