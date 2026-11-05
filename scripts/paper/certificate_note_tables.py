@@ -12,6 +12,7 @@ directory) listing them; every command first checks the files against the manife
     certificate_note_tables.py numbers          every \\pn key and its value
     certificate_note_tables.py check TEX...     every table (by its \\label) and \\pn{key}{value} against its regeneration
     certificate_note_tables.py fill TEX...      each \\pn's value replaced by its regeneration
+    certificate_note_tables.py near-ties        write bound/near-ties.jsonl from the bounded tables (reads each table)
     certificate_note_tables.py manifest         write manifest.sha256 over the data files
 
 check exits 1 on any difference, a key with no source, or a file that doesn't match the manifest.
@@ -31,6 +32,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "certnote"))
 import certificate_cost as ccost  # scripts/ isn't a package
 
@@ -40,7 +43,9 @@ FILES = (
     "faults/faults.jsonl",
     "bound/bound.jsonl",
     "affine/affine.jsonl",
+    "bound/near-ties.jsonl",
 )
+SNAP_RATIO = 1.05  # the certifier's near tie
 LINEAR = "curriculum-linear"  # the linear-window networks' files (D9)
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 Numbers = dict[str, str]
@@ -54,11 +59,16 @@ def results(data: Path) -> list[dict[str, Any]]:
     return ccost.rows([data / "recertify" / "results.jsonl"])
 
 
+def natural(text: str) -> list[int | str]:
+    """A sort key that puts 5 before 11."""
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", text)]
+
+
 def by_family(rows: list[dict[str, Any]], task: Callable[[dict[str, Any]], str]) -> dict[str, list[dict[str, Any]]]:
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in rows:
         groups[ccost.family(task(r))].append(r)
-    return dict(sorted(groups.items()))
+    return dict(sorted(groups.items(), key=lambda item: natural(item[0])))
 
 
 def grouped(n: int) -> str:
@@ -95,7 +105,7 @@ def name(family: str) -> str:
 def recertify_table(data: Path) -> list[str]:
     """Per family and window: networks, reachable states, entries, seconds, bytes and Chow's words."""
     rows: list[str] = []
-    for t in ccost.readings(results(data)):
+    for t in sorted(ccost.readings(results(data)), key=lambda t: (natural(t["family"]), t["columns"])):
         words = "--" if t["chow_words"] is None else " / ".join(grouped(w) for w in t["chow_words"])
         rows.append(
             f"{name(t['family'])} & {t['columns']} & {t['jobs']} & {span(*t['reachable'])} & "
@@ -131,7 +141,16 @@ def miss_cell(p: float) -> str:
         return f"{p:.2f}"
     if p <= 0.0:
         return "$0$"
-    return f"$10^{{{math.floor(math.log10(p))}}}$"
+    return scientific(p)
+
+
+def scientific(p: float) -> str:
+    """A small chance to one figure, rounded up: 4.47e-8 as $5 \\times 10^{-8}$."""
+    exponent = math.floor(math.log10(p))
+    digit = math.ceil(p / 10.0**exponent)
+    if digit == 10:
+        digit, exponent = 1, exponent + 1
+    return f"$10^{{{exponent}}}$" if digit == 1 else f"${digit} \\times 10^{{{exponent}}}$"
 
 
 def bound_table(data: Path) -> list[str]:
@@ -149,7 +168,7 @@ def bound_table(data: Path) -> list[str]:
         rest = affine.get(family, [])
         outside = sum(r["outside"] for r in [*rs, *rest])
         rows.append(
-            f"{name(family)} & {len(rs)} & {full} & {100 * labels:.1f} & {100 * snaps:.1f} & {100 * covered:.1f} & "
+            f"{name(family)} & {len(rs)} & {full} & {100 * labels:.2f} & {100 * snaps:.2f} & {100 * covered:.2f} & "
             f"{len(rest)} & {sum(decided(r) for r in rest)} & {outside} \\\\"
         )
     return rows
@@ -175,7 +194,9 @@ def recertify_numbers(data: Path) -> Numbers:
     rs = results(data)
     certified = [r for r in rs if r["certified"]]
     reproduced = sum(bool(r["reproduced"]) for r in rs)
-    largest = max(rs, key=lambda r: r["check"]["entries"])
+    most = max(r["check"]["entries"] for r in rs)
+    largest = [r for r in rs if r["check"]["entries"] == most]
+    transformer = {r["job"]["sha256"] for r in certified if LINEAR not in r["job"]["network"]}
     return {
         "recert-jobs": grouped(len(rs)),
         "recert-networks": grouped(len({r["job"]["sha256"] for r in rs})),
@@ -189,10 +210,12 @@ def recertify_numbers(data: Path) -> Numbers:
         "recert-ambiguous": grouped(sum(r.get("encodings_reproducing", 1) > 1 for r in rs)),
         "recert-moved": grouped(sum(r["check"]["differences"].get("snaps_moved", 0) for r in rs)),
         "recert-not-bitwise": grouped(sum(r["check"]["differences"].get("leads_not_bitwise", 0) for r in rs)),
-        "recert-largest-entries": grouped(largest["check"]["entries"]),
-        "recert-largest-codes": grouped(largest["reachable"]),
-        "recert-largest-check-minutes": f"{(largest['check']['fidelity_seconds'] + largest['check']['structure_seconds']) / 60:.0f}",
-        "recert-largest-megabytes": f"{largest['check']['bytes'] / 1e6:.0f}",
+        "recert-largest-entries": grouped(most),
+        "recert-largest-codes": grouped(largest[0]["reachable"]),
+        "recert-largest-check-minutes": f"{max(r['check']['fidelity_seconds'] + r['check']['structure_seconds'] for r in largest) / 60:.0f}",
+        "recert-largest-megabytes": f"{max(r['check']['bytes'] for r in largest) / 1e6:.0f}",
+        "recert-adapter-tables": grouped(sum(bool(r["query_tokens"]) for r in rs)),
+        "recert-transformer-networks": grouped(len(transformer)),
         "recert-entries": grouped(sum(r["check"]["entries"] for r in rs)),
     }
 
@@ -202,6 +225,8 @@ def fault_numbers(data: Path) -> Numbers:
     division = [r for r in rs if r["task"].startswith("modular-division-") and r["rank"] == "rarest"]
     likely = sum(r["catalogue_miss"] > 0.5 for r in rs)
     wide = [r for r in rs if r["columns"] > 1]
+    rarest = [r for r in rs if r["rank"] == "rarest"]
+    elsewhere = [r for r in rs if r["columns"] == 1 and not r["task"].startswith("modular-division-")]
     return {
         "faults": grouped(len(rs)),
         "fault-tables": grouped(len({r["table"] for r in rs})),
@@ -216,6 +241,13 @@ def fault_numbers(data: Path) -> Numbers:
         "fault-wide-worst-common": miss_cell(
             max((r["catalogue_miss"] for r in wide if r["rank"] == "commonest"), default=0.0)
         ),
+        "faults-wide": grouped(len(wide)),
+        "faults-rarest": grouped(len(rarest)),
+        "faults-rarest-first-window": grouped(sum(r["window"] == 0 for r in rarest)),
+        "fault-division-worst": f"{max((r['catalogue_miss'] for r in division), default=0.0):.4f}",
+        "fault-division-below": f"{max((r['catalogue_miss'] for r in division if r['catalogue_miss'] <= 0.5), default=0.0):.2f}",
+        "fault-short-worst": f"{max((r['catalogue_miss'] for r in wide if r['columns'] == 2), default=0.0):.2f}",
+        "fault-elsewhere-worst": miss_cell(max((r["catalogue_miss"] for r in elsewhere), default=0.0)),
     }
 
 
@@ -226,8 +258,20 @@ def bound_numbers(data: Path) -> Numbers:
     networks = {r["job"]["id"].rsplit("-", 1)[0]: r for r in results(data) if r["certified"]}
     reached = {Path(r["table"]).stem.rsplit("-", 1)[0] for r in rs}
     left = [r for key, r in networks.items() if key not in reached]
+    columns = {r["job"]["id"]: r["job"]["columns"] for r in results(data)}
+    long = [r for r in bounded if columns.get(Path(r["table"]).stem) == 4]
+    rest = [r for r in bounded if columns.get(Path(r["table"]).stem) != 4]
+    rest_entries = sum(r["entries"] for r in rest)
+    transformer = [r for r in bounded if LINEAR not in r["network"]]
     return {
         "bound-networks": grouped(len(rs)),
+        "bound-strict": grouped(sum(Path(r["table"]).stem.endswith("-1.0") for r in bounded)),
+        "bound-long-minutes": f"{max((r['seconds'] for r in long), default=0.0) / 60:.0f}",
+        "bound-rest-tables": grouped(len(rest)),
+        "bound-rest-labels-percent": f"{100 * sum(r['labels_sound'] for r in rest) / rest_entries:.1f}",
+        "bound-rest-snaps-percent": f"{100 * sum(r['snaps_sound'] + r['snaps_covered'] for r in rest) / rest_entries:.1f}",
+        "bound-transformer-tables": grouped(len(transformer)),
+        "bound-transformer-full": grouped(sum(decided(r) for r in transformer)),
         "bound-left": grouped(len(left)),
         "bound-left-long": grouped(sum(r["job"]["columns"] == 4 for r in left)),
         "bound-long": grouped(sum(r["job"]["columns"] == 4 for key, r in networks.items() if key in reached)),
@@ -243,6 +287,37 @@ def bound_numbers(data: Path) -> Numbers:
     }
 
 
+def near_tie_lines(data: Path) -> list[dict[str, Any]]:
+    """Per bounded table, read from the table itself: snaps within the certifier's ratio, branches and the start's margin."""
+    out: list[dict[str, Any]] = []
+    for r in lines(data / "bound" / "bound.jsonl"):
+        if "unsupported" in r:
+            continue
+        with np.load(data / "recertify" / "tables" / Path(r["table"]).name, allow_pickle=False) as a:
+            ratios = a["ratios"]
+            out.append(
+                {
+                    "table": r["table"],
+                    "within": int((ratios < SNAP_RATIO).sum()),
+                    "smallest": float(ratios.min()),
+                    "branches": len(a["branch_rows"]),
+                    "start": float(a["start_ratios"].min()),
+                }
+            )
+    return out
+
+
+def near_tie_numbers(data: Path) -> Numbers:
+    rs = lines(data / "bound" / "near-ties.jsonl")
+    return {
+        "bound-near-snaps": grouped(sum(r["within"] for r in rs)),
+        "bound-near-tables": grouped(sum(r["within"] > 0 for r in rs)),
+        "bound-smallest-ratio": f"{min(r['smallest'] for r in rs):.7f}",
+        "bound-branch-tables": grouped(sum(r["branches"] > 0 for r in rs)),
+        "bound-start-ratio": f"{min(r['start'] for r in rs):.2f}",
+    }
+
+
 def affine_numbers(data: Path) -> Numbers:
     """The affine bound, and how it meets the interval bound: it is run on the tables the interval leaves undecided."""
     rs = lines(data / "affine" / "affine.jsonl")
@@ -251,6 +326,7 @@ def affine_numbers(data: Path) -> Numbers:
     ran = {r["table"] for r in rs}
     return {
         "affine-tables": grouped(len(rs)),
+        "affine-strict": grouped(sum(Path(r["table"]).stem.endswith("-1.0") for r in rs)),
         "affine-entries": grouped(sum(r["entries"] for r in rs)),
         "affine-full": grouped(sum(decided(r) for r in rs)),
         "affine-labels-undecided": grouped(sum(r["labels_undecided"] for r in rs)),
@@ -290,6 +366,7 @@ NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     recertify_numbers,
     fault_numbers,
     bound_numbers,
+    near_tie_numbers,
     affine_numbers,
     second_family_numbers,
 ]
@@ -344,7 +421,13 @@ def main(argv: list[str]) -> int:
     fill = commands.add_parser("fill")
     fill.add_argument("manuscripts", type=Path, nargs="+")
     commands.add_parser("manifest")
+    commands.add_parser("near-ties")
     args = parser.parse_args(argv)
+    if args.command == "near-ties":
+        rows = near_tie_lines(args.data)
+        (args.data / "bound" / "near-ties.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+        print(f"{len(rows)} tables")
+        return 0
     if args.command == "manifest":
         text = "".join(f"{hashlib.sha256((args.data / f).read_bytes()).hexdigest()}  {f}\n" for f in FILES)
         (args.data / "manifest.sha256").write_text(text)

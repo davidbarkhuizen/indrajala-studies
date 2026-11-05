@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "paper"))
@@ -18,6 +19,7 @@ def result(job: str, sha: str, task: str, certified: bool = True) -> dict[str, A
         "reproduced": True,
         "encodings_reproducing": 1,
         "reachable": 6,
+        "query_tokens": [],
         "certify_seconds": 0.2,
         "seconds": 0.1,
         "check": {
@@ -39,6 +41,7 @@ def fault(table: str, rank: str, miss: float) -> dict[str, Any]:
         "task": "modular-sum-4",
         "rank": rank,
         "columns": 1,
+        "window": 0,
         "caught": True,
         "counterexample_windows": 2,
         "catalogue_miss": miss,
@@ -95,6 +98,9 @@ def data(tmp_path: Path) -> Path:
         + "\n"
     )
     (tmp_path / "affine" / "affine.jsonl").write_text(json.dumps(affine("v")) + "\n")
+    (tmp_path / "bound" / "near-ties.jsonl").write_text(
+        json.dumps({"table": "t", "within": 3, "smallest": 1.0000067, "branches": 2, "start": 2.53}) + "\n"
+    )
     assert cnt.main(["--data", str(tmp_path), "manifest"]) == 0
     return tmp_path
 
@@ -121,6 +127,33 @@ def test_an_affine_run_on_the_wrong_table_is_a_mismatch_both_ways(data: Path):
 def test_the_bound_table_reads_both_bounds(data: Path):
     (row,) = cnt.bound_table(data)
     assert row.startswith("sum mod 4 & 2 & 1 & ") and row.endswith(" & 1 & 1 & 0 \\\\")
+
+
+def test_the_near_ties_are_read_from_the_tables_themselves(tmp_path: Path):
+    (tmp_path / "bound").mkdir()
+    (tmp_path / "recertify" / "tables").mkdir(parents=True)
+    np.savez(
+        tmp_path / "recertify" / "tables" / "t-1.0.npz",
+        ratios=np.array([[1.01, 2.0], [3.0, 1.2]]),
+        branch_rows=np.array([0]),
+        start_ratios=np.array([2.5]),
+    )
+    (tmp_path / "bound" / "bound.jsonl").write_text(
+        json.dumps({"table": "x/t-1.0.npz"}) + "\n" + json.dumps({"table": "u", "unsupported": "branches"}) + "\n"
+    )
+    assert cnt.near_tie_lines(tmp_path) == [
+        {"table": "x/t-1.0.npz", "within": 1, "smallest": 1.01, "branches": 1, "start": 2.5}
+    ]
+
+
+def test_small_chances_read_as_one_figure_rounded_up():
+    assert cnt.scientific(4.47e-8) == "$5 \\times 10^{-8}$"
+    assert cnt.scientific(1e-5) == "$10^{-5}$"
+    assert cnt.scientific(9.5e-3) == "$10^{-2}$"
+
+
+def test_families_sort_by_their_numbers():
+    assert sorted(["division-11", "division-5"], key=cnt.natural) == ["division-5", "division-11"]
 
 
 def test_the_affine_results_are_in_the_manifest(data: Path):

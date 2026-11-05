@@ -155,6 +155,22 @@ def test_a_truncated_table_fails_closure(tmp_path: Path):
     assert fails["closure"] > 0 and fails["onto"] == 1
 
 
+def test_a_nan_lead_fails_rather_than_passing_the_margin(tmp_path: Path):
+    _, path = stand_in_table(tmp_path, Adder(1))
+    _, a = cc.load(path)
+    leads = a["leads"].copy()
+    leads[0, 0] = np.nan
+    assert structure(rewrite(path, leads=leads))["lead"] == 1
+
+
+def test_onto_asks_only_for_the_states_whole_windows_reach():
+    # every token toggles the state, so two tokens return to it: s1 is reachable by tokens, not by whole 2-windows
+    toggle = np.array([[1, 1], [0, 0]])
+    output = np.zeros((2, 2), dtype=np.int64)
+    _, after = cc.target_windows(toggle, output, cc.windows(2, 2))
+    assert cc.target_reachable(toggle, 0) == {0, 1} and cc.target_reachable(after, 0) == {0}
+
+
 def test_a_wrong_phi_fails_labels_and_next(tmp_path: Path):
     _, path = stand_in_table(tmp_path, Adder(1))
     _, a = cc.load(path)
