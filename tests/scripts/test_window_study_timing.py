@@ -12,10 +12,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"
 import window_study_timing as study_timing  # scripts/ isn't a package
 
 
-def test_the_default_case_is_the_long_test_at_1024_columns() -> None:
-    assert [study_timing.timing.parse_case(case) for case in study_timing.DEFAULT_CASES] == [
-        ("long-test", "family", {"p": 7, "f": 32, "n": 1024, "c": 1023}, "U1")
-    ]
+def test_the_default_is_the_learn_and_forward_cases_then_the_long_test_at_1024_columns() -> None:
+    *cases, last = study_timing.DEFAULT_CASES
+    assert cases == study_timing.timing.DEFAULT_CASES
+    assert {study_timing.timing.parse_case(case)[0] for case in cases} == {"learn", "forward"}
+    assert study_timing.timing.parse_case(last) == (
+        "long-test",
+        "family",
+        {"p": 7, "f": 32, "n": 1024, "c": 1023},
+        "U1",
+    )
 
 
 @pytest.mark.parametrize(
