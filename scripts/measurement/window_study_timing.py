@@ -11,7 +11,10 @@ this reuses (the research-separation workplan, D3). A case is a name, its kind f
   arm (two factors of m codes, the window's output read) from seed 0 for e epochs in all, into a
   temporary directory (a real run, not one step).
 
-The learn and forward cases are window_recurrent_timing.py's; given here they run as there.
+The learn and forward cases are window_recurrent_timing.py's; given here they run as there. The default
+is all of them, its own default cases first, then the long test at 1,024 columns: one A/B covers a
+window-program change, training (forward and backward), the forward pass and the long test (ml's
+window-timing-guard workplan, D1).
 
     python scripts/measurement/window_study_timing.py [--cases CASE ...] [--repeats 5]
     python scripts/measurement/window_study_timing.py --breakdown CASE [CASE ...]
@@ -38,7 +41,7 @@ sys.path.insert(0, str(Path(indrajala_ml.__path__[0]).parent / "scripts" / "meas
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 import window_recurrent_timing as timing
 
-DEFAULT_CASES = ["long-test-family-p7-f32-U1-n1024-c1023"]
+DEFAULT_CASES = [*timing.DEFAULT_CASES, "long-test-family-p7-f32-U1-n1024-c1023"]
 FAMILY_QUERIES = ("sum", "difference")
 
 

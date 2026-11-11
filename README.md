@@ -19,8 +19,9 @@ and the primitive-era studies that validate its features.
   the machines and the shell).
 - `data/` (gitignored): every study's results and networks, with their manifests.
 
-**Timing:** ml's `ab.py` runs `scripts/measurement/window_study_timing.py` (the long test and a study
-run end to end) by its absolute path, each side's ml tree supplying the library:
+**Timing:** ml's `ab.py` runs `scripts/measurement/window_study_timing.py` by its absolute path, each
+side's ml tree supplying the library. Its default (ml's learn and forward cases, then the long test) is
+the one A/B a window-program change needs; it also has a short study run end to end, by name:
 `ab.py remote --host jebel run --bench cmd ... -- /home/david/code/indrajala-studies/scripts/measurement/window_study_timing.py`.
 
 **Paper 1** is reproduced from the tags `paper1-v1` and `paper1-v1.1` in ml and the crate, where the
