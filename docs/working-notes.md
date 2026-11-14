@@ -132,9 +132,14 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
   ~/code/indrajala-ml worktree remove --force ~/code/wt-batch`).
 - **The crate is pinned too** (D6): `register` records the crate extension's SHA-256 (`--crate`, default
   the registering machine's) and the controller refuses a worker that imports another. Builds of one
-  source differ by machine, so every host imports one build: `b.CRATE` (`crate-647f23c`), the package
-  directories copied from `pyramidon`'s venv into `~/code/crate-647f23c` (`~/labour/` on `stone`) and put
-  first on PYTHONPATH by the host table. A new crate: a new directory on every host, `CRATE` changed. T1 ran before the check: `pyramidon`'s crate (rust 647f23c, whose one change is
+  source differ by machine, so every host imports one build: `b.CRATE` (`crate-edce2de` since 2026-11-14,
+  `crate-647f23c` before), the package directories in `~/code/crate-<commit>` (`~/labour/` on `stone`) put
+  first on PYTHONPATH by the host table. A new crate: a new directory on every host, `CRATE` changed.
+  **A crate behind the ml the studies pin fails at once** (2026-11-14: 647f23c had no `set_threads` and no
+  Adam `weight_decay`, so every run at studies 4b8f94f died at its first step): when ml is bumped, check
+  its `rust` pin against `CRATE`. Build the new one from a worktree of `ml/rust` at the pin (`maturin build
+  --release --out DIR`, the wheel unpacked with `python3 -m zipfile -e`), not from a venv's build, whose
+  crate may sit at another commit (pyramidon's did: `ml/rust` checked out behind its pin). T1 ran before the check: `pyramidon`'s crate (rust 647f23c, whose one change is
   aarch64-only NEON) differed from `klip`'s and `stone`'s (45d6a37); `same-prefix` on `d5-sum-304` gave
   31 identical rows across them (2026-10-23).
 - **A lost attempt re-run on its host appended to its old log** (T1: `d5-sum-300`, `d5-sum-302`,
