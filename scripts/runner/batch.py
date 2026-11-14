@@ -13,7 +13,7 @@ each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_studie
     python scripts/runner/batch.py report DIR
 
 SPEC is `s3:40-47,mtf4:32-35` (BACKDROPS' short names), run under each cell in turn (the longest
-first); a cutoff is a backdrop's Luby t* in epochs trained
+first), or a part under its own cell alone, `s3:40-47@paper`; a cutoff is a backdrop's Luby t* in epochs trained
 (the run's --cutoff-epochs; epochs are the time axis). The controller serves until the batch is done; a worker runs its attempts in
 ROOT/<attempt>/ from WORKTREE's scripts and reconnects after a dropped connection. Across machines
 (stage 4): `prepare` puts each host's worktree at the batch's commit, `fleet` keeps a reverse ssh tunnel
