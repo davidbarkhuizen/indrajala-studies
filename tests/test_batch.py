@@ -494,6 +494,21 @@ def test_a_machine_backdrop_with_an_arm_asks_its_queries():
     assert b.BACKDROPS["rq16"].args(3) == ["--runs", "random-q16-0:3"]  # the default arm: none
 
 
+def test_the_told_plans_backdrops_share_one_vocabulary_an_arm_and_its_controls():
+    """The told plan's stage 1 (D5): each target's three arms ask the same tokens, the queries alone differ."""
+    assert [b.BACKDROPS[f"told-d5-{arm}"].args(800) for arm in ("quotient", "sum", "matched")] == [
+        ["--p", "5", "--seed", "800", "--arm", arm, "--vocabulary", "sum", "matched"]
+        for arm in ("quotient", "sum", "matched")
+    ]
+    assert len(b.TOLD_PLANTED) == 25 and not set(b.TOLD_PLANTED) & {*b.T10_PLANTED, *b.T10R_PLANTED, b.T10_PROBE}
+    task = "random-planted-q16-b4-54"
+    assert b.BACKDROPS["told-alone-54"].args(1) == ["--runs", f"{task}:1", "--vocabulary", "planted", "matched"]
+    for arm in ("planted", "matched"):
+        made = b.BACKDROPS[f"told-{arm}-54"].args(1)
+        assert made == ["--runs", f"{task}:1", "--arm", arm, "--vocabulary", "planted", "matched"]
+    assert {b.BACKDROPS[f"told-{arm}-87"].bound for arm in ("alone", "planted", "matched")} == {16}
+
+
 def test_t1s_cell_is_the_approximation_claims():
     command = worker(Path("/tmp"), "w", 1).command(b.Attempt("d5-sum-0", "approximation", "d5-sum", 0))
     assert command[command.index("--budget-epochs") + 1] == "400"

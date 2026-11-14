@@ -144,6 +144,14 @@ T10_PROBE = 15
 # and 47 gain others)
 T10R_P0 = tuple(range(15, 40))
 T10R_PLANTED = (23, 24, *range(27, 42), 43, 44, 46, *range(48, 53))
+# The told plan's stage 1 (indrajala-research docs/workplans/what-is-told-workplan.md, D4-D6): division at
+# p 5 on one vocabulary (the sum and its matched partition), and fresh planted machines, the first 25
+# planted q16-b4 seeds from 53 whose only nontrivial principal congruence is the planted one (53, 62,
+# 63, 65, 66, 70, 79, 81, 83 and 86 gain others), each arm on one vocabulary (its blocks and their
+# matched partition)
+TOLD_VOCABULARY = ("sum", "matched")
+TOLD_PLANTED = (*range(54, 62), 64, 67, 68, 69, *range(71, 79), 80, 82, 84, 85, 87)
+TOLD_MACHINE_VOCABULARY = ("planted", "matched")
 
 
 @dataclass(frozen=True)
@@ -165,10 +173,10 @@ class Backdrop:
         return self.task.startswith(DIVISION)
 
     def args(self, seed: int) -> list[str]:
+        vocabulary = ["--vocabulary", *self.vocabulary] if self.vocabulary else []
         if not self.division:
             arm = [] if self.arm == "family" else ["--arm", self.arm]  # a machine's queries (T10's P2: planted)
-            return ["--runs", f"{self.task}:{seed}", *arm]
-        vocabulary = ["--vocabulary", *self.vocabulary] if self.vocabulary else []
+            return ["--runs", f"{self.task}:{seed}", *arm, *vocabulary]
         return ["--p", self.task.removeprefix(DIVISION), "--seed", str(seed), "--arm", self.arm, *vocabulary]
 
     def log(self, directory: Path, seed: int) -> Path:
@@ -210,6 +218,15 @@ BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name 
     "t11-s3": Backdrop("word-problem-s3", 6, "cover"),
     "t11-s4": Backdrop("word-problem-s4", 24, "cover"),
     "t11-mtf4": Backdrop("move-to-front-4", 24, "cover"),
+    # the told plan's stage 1 (D5): at p 5 the answers alone, the sum, and the sum's matched partition, on
+    # one vocabulary; on fresh planted machines the answers alone, the planted blocks, and their matched
+    # partition, on one vocabulary, machine by machine
+    **{f"told-d5-{arm}": division(5, arm, TOLD_VOCABULARY) for arm in ("quotient", "sum", "matched")},
+    **{
+        f"told-{name}-{m}": Backdrop(f"random-planted-q16-b4-{m}", 16, arm, TOLD_MACHINE_VOCABULARY)
+        for m in TOLD_PLANTED
+        for name, arm in (("alone", "family"), ("planted", "planted"), ("matched", "matched"))
+    },
 }
 
 

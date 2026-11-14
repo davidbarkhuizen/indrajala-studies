@@ -1024,8 +1024,12 @@ ARMS = {
     "token": mf.TOKEN,
     "planted": mf.PLANTED,
     "cover": mf.COVER,
+    "matched": mf.MATCHED,
 }
-MACHINE_ARMS = ("planted", "cover")  # a machine's queries (wt.query_partitions); the rest are division's
+MACHINE_ONLY = ("planted", "cover")  # a machine's queries alone (wt.query_partitions)
+MACHINE_ARMS = (*MACHINE_ONLY, "matched")  # a machine's queries; matched is division's too (the told plan's D4)
+# --vocabulary's names: division's operations and the machines' named partitions (wt.query_partitions)
+VOCABULARY_NAMES = list(dict.fromkeys((*mf.QUERIES, *mf.PLANTED, *mf.COVER, *mf.MATCHED)))
 
 
 def main(argv: list[str]) -> int:
@@ -1036,7 +1040,7 @@ def main(argv: list[str]) -> int:
         "--arm",
         choices=sorted(ARMS),
         default="family",
-        help="division's queries, or a machine's (planted: a planted machine's approximation, T10's P2; cover: T11's coarsest cover, D20)",
+        help="division's queries, or a machine's (planted: a planted machine's approximation, T10's P2; cover: T11's coarsest cover, D20); matched: the sum's or the planted blocks' matched partition (the told plan's D4)",
     )
     seeds = run.add_mutually_exclusive_group(required=True)
     seeds.add_argument("--seed", type=int, help="one run, into --out")
@@ -1100,9 +1104,9 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.QUERIES),
-        default=list(mf.VOCABULARY),
-        help="the operations with a token (the approximation claim's: sum difference product)",
+        choices=VOCABULARY_NAMES,
+        default=None,
+        help="the operations with a token (the approximation claim's: sum difference product); by default division's sum difference, a machine's queries",
     )
     run.add_argument("--out", type=Path, required=True)
     run.add_argument(
@@ -1373,9 +1377,9 @@ def main(argv: list[str]) -> int:
     certify.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.QUERIES),
-        default=list(mf.VOCABULARY),
-        help="the operations with a token (the approximation claim's: sum difference product)",
+        choices=VOCABULARY_NAMES,
+        default=None,
+        help="the operations with a token (the approximation claim's: sum difference product); by default division's sum difference, a machine's queries",
     )
     certify.add_argument("--out", type=Path, required=True)
     long = commands.add_parser("long-test", help="saved family networks' long tests, one slot")
@@ -1389,9 +1393,9 @@ def main(argv: list[str]) -> int:
     long.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.QUERIES),
-        default=list(mf.VOCABULARY),
-        help="the operations with a token (the approximation claim's: sum difference product)",
+        choices=VOCABULARY_NAMES,
+        default=None,
+        help="the operations with a token (the approximation claim's: sum difference product); by default division's sum difference, a machine's queries",
     )
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
@@ -1422,9 +1426,9 @@ def main(argv: list[str]) -> int:
     stop.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.QUERIES),
-        default=list(mf.VOCABULARY),
-        help="the run's, for the strict verdict (a row with none: its saved step network's, with --task)",
+        choices=VOCABULARY_NAMES,
+        default=None,
+        help="the run's, for the strict verdict (a row with none: its saved step network's, with --task); by default division's sum difference, a machine's queries",
     )
     proof = commands.add_parser(
         "answers-proof",
@@ -1436,9 +1440,9 @@ def main(argv: list[str]) -> int:
     proof.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.QUERIES),
-        default=list(mf.VOCABULARY),
-        help="the operations with a token (the approximation claim's: sum difference product)",
+        choices=VOCABULARY_NAMES,
+        default=None,
+        help="the operations with a token (the approximation claim's: sum difference product); by default division's sum difference, a machine's queries",
     )
     proof.add_argument("--slack", type=float, nargs="+", default=[1.0, 1.1], help="each bound: the states times this")
     proof.add_argument(
@@ -1559,9 +1563,9 @@ def main(argv: list[str]) -> int:
         reading.add_argument(
             "--vocabulary",
             nargs="+",
-            choices=list(mf.QUERIES),
-            default=list(mf.VOCABULARY),
-            help="the operations with a token (the approximation claim's: sum difference product)",
+            choices=VOCABULARY_NAMES,
+            default=None,
+            help="the operations with a token (the approximation claim's: sum difference product); by default division's sum difference, a machine's queries",
         )
         reading.add_argument("--d", type=int, help="a right code's word length (default the task's distinguishing + 1)")
         reading.add_argument("--out", type=Path, help="a directory for each network's <network>.<command>.json")
@@ -1616,6 +1620,13 @@ def main(argv: list[str]) -> int:
     separation.add_argument(
         "--live", action="store_true", help="every snapped factor read continuous (a warm-up's network, as it trained)"
     )
+    told = commands.add_parser(
+        "told",
+        help="each task's arms: the classes of its states one column's training targets tell apart (the told "
+        "plan's measure), and whether each query is an approximation (a congruence)",
+    )
+    told.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
+    told.add_argument("--arms", nargs="+", choices=sorted(ARMS), default=["quotient"], help="the arms to count")
     congruences = commands.add_parser(
         "congruences", help="each task's machine: its nontrivial principal congruences (its approximations' atoms)"
     )
@@ -1697,6 +1708,11 @@ def main(argv: list[str]) -> int:
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
         arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
         print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs, args.long_tests)))
+        return 0
+    if args.command == "told":
+        for name in args.tasks:
+            for arm in args.arms:
+                print(told_line(name, arm), flush=True)
         return 0
     if args.command == "congruences":
         for name in args.tasks:
@@ -2249,6 +2265,30 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
     return line
 
 
+def told_line(task: str, arm: str) -> str:
+    """One arm of a task: its classes told of the target's states, and each query a congruence or not."""
+    queries = ARMS[arm]
+    if not task.startswith("modular-division-") and not set(queries) <= set(wt.query_partitions(task)):
+        return f"{task} {arm}: no such partition to ask"
+    encoding = (
+        mf.Encoding(int(task.rsplit("-", 1)[1]), queries, queries)
+        if task.startswith("modular-division-")
+        else mf.target_named(task, queries if arm in MACHINE_ARMS else ())
+    )
+    machine, labels = encoding.task.machine, mf.query_labels(encoding)
+    told = mf.classes_told(encoding)
+    kinds = (
+        "-"
+        if labels is None
+        else ", ".join(
+            f"{q} {'congruence' if machine.is_congruence(x) else 'no congruence'}"
+            for q, x in zip(encoding.queries, labels, strict=True)
+        )
+    )
+    shown = "not a function of the state" if told is None else f"{told} / {machine.states}"
+    return f"{task} {arm}: told {shown}; {kinds or 'no queries'}"
+
+
 def _course(path: Path) -> mf.Course:
     """A run's restart course in epochs from its log; a log with no step end is a run that never trained: refused."""
     course = mf.restart_course([json.loads(line) for line in path.read_text().splitlines()])
@@ -2259,16 +2299,19 @@ def _course(path: Path) -> mf.Course:
 
 def _target(task: str, args: argparse.Namespace) -> mf.Target:
     """
-    A task's target: division's or the modular sum's family encoding at its p (the arm's queries), else
-    the machine's own, with a machine arm's queries (any other arm: none).
+    A task's target: division's or the modular sum's family encoding at its p (the arm's queries; the
+    vocabulary by default mf.VOCABULARY), else the machine's own, with a machine arm's queries (any other
+    arm: none; the vocabulary by default the queries).
     """
     arm = getattr(args, "arm", "family")
     if task.startswith("modular-"):
-        if arm in MACHINE_ARMS:
+        if arm in MACHINE_ONLY:
             raise SystemExit(f"--arm {arm} asks a machine's approximation: not {task}'s")
         p = int(task.rsplit("-", 1)[1])
-        return mf.Encoding(p, ARMS[arm], tuple(getattr(args, "vocabulary", mf.VOCABULARY)))
-    return mf.target_named(task, ARMS[arm] if arm in MACHINE_ARMS else ())
+        return mf.Encoding(p, ARMS[arm], tuple(getattr(args, "vocabulary", None) or mf.VOCABULARY))
+    return mf.target_named(
+        task, ARMS[arm] if arm in MACHINE_ARMS else (), tuple(getattr(args, "vocabulary", None) or ())
+    )
 
 
 def _trigger_arguments(command: argparse.ArgumentParser) -> None:

@@ -273,3 +273,82 @@ def test_synchronising_needs_every_pair_joined_not_one_token_of_low_rank():
     transition = np.array([[1, 0], [0, 0], [3, 2], [2, 2]], dtype=np.int64)
     machine = wt.Mealy(transition, transition)
     assert machine.token_ranks() == [4, 2] and not machine.synchronising()
+
+
+def test_classes_told_reproduces_the_programme_reviews_counts():
+    """The told plan's measure (the review's O1): division at p 5 and T10's and T10r's planted machines given their blocks."""
+    from indrajala_studies import batch as b
+
+    machine = wt.modular_machine(5)
+    product = np.array([(A * B) % 5 for A in range(5) for B in range(5)])
+    assert [wt.classes_told(machine, x) for x in ([], [product], [wt.division_sum(5)], [np.arange(25)])] == [
+        6,
+        10,
+        22,
+        25,
+    ]
+    told = [
+        wt.classes_told(wt.task_named(f"random-planted-q16-b4-{m}").machine, [wt.planted_blocks(16, 4)])
+        for m in (*b.T10_PLANTED, *b.T10R_PLANTED)
+    ]
+    assert (min(told), max(told), round(sum(told) / len(told), 1)) == (8, 15, 11.2)
+
+
+def test_a_state_reached_with_two_labels_has_no_own_label():
+    transition = np.array([[0, 1], [1, 0]])
+    with pytest.raises(AssertionError, match="no own label"):
+        wt.state_labels(wt.Mealy(transition, np.array([[0, 1], [0, 0]])))
+
+
+def matched_holds(machine: wt.Mealy, approximation: np.ndarray, matched: np.ndarray) -> None:
+    """D4's three properties: the approximation's block sizes, no congruence, and as many classes told."""
+    assert sorted(np.bincount(matched).tolist()) == sorted(np.bincount(approximation).tolist())
+    assert machine.is_congruence(approximation) and not machine.is_congruence(matched)
+    assert wt.classes_told(machine, [matched]) == wt.classes_told(machine, [approximation])
+    assert tuple(matched.tolist()) == wt.canonical(matched)
+
+
+def test_divisions_matched_partition_is_fixed_and_holds_d4():
+    """The told plan's D4 at p 5: the sum's 5 blocks of 5, told 22, no congruence; its labels pinned."""
+    matched = wt.division_matched(5)
+    assert matched.tolist() == [0, 1, 2, 3, 4, 4, 3, 3, 3, 3, 1, 0, 0, 0, 4, 1, 1, 1, 4, 2, 4, 2, 0, 2, 2]
+    matched_holds(wt.modular_machine(5), wt.division_sum(5), matched)
+    assert wt.classes_told(wt.modular_machine(5), [matched]) == 22
+
+
+def test_the_told_plans_planted_machines_follow_t10rs_rule_and_their_matched_partitions_hold_d4():
+    """
+    Stage 1's draws (D5): the first 25 planted q16-b4 seeds from 53 whose only nontrivial principal
+    congruence is the planted one (the rule reproduces T10r's draws too); each matched partition holds
+    D4's properties, and their labels are pinned by a digest.
+    """
+    import hashlib
+
+    from indrajala_studies import batch as b
+
+    def drawn(first: int, count: int) -> tuple[int, ...]:
+        blocks = [tuple(wt.planted_blocks(16, 4).tolist())]
+        kept = (
+            m
+            for m in itertools.count(first)
+            if wt.task_named(f"random-planted-q16-b4-{m}").machine.principal_congruences() == blocks
+        )
+        return tuple(itertools.islice(kept, count))
+
+    assert drawn(23, 25) == b.T10R_PLANTED
+    assert drawn(53, 25) == b.TOLD_PLANTED
+    digest = hashlib.sha256()
+    for m in b.TOLD_PLANTED:
+        name = f"random-planted-q16-b4-{m}"
+        matched = wt.planted_matched(name)
+        matched_holds(wt.task_named(name).machine, wt.planted_blocks(16, 4), matched)
+        assert wt.query_partitions(name)["matched"] is matched
+        digest.update(bytes(matched.tolist()))
+    assert digest.hexdigest() == "87dfe0909d9c333169a0f011078e326f8a24562a5cc3223ca11a06e06010ba62"
+
+
+def test_a_congruence_is_never_matched():
+    """matched_partition asks for an approximation to match, and refuses a partition that isn't one."""
+    machine = wt.modular_machine(5)
+    with pytest.raises(AssertionError, match="a congruence"):
+        wt.matched_partition(machine, wt.division_matched(5), "x")
