@@ -364,7 +364,7 @@ def test_a_remote_attempt_is_pulled_and_checked_against_its_manifest(tmp_path: P
 def test_the_fleets_commands_follow_each_hosts_rules():
     stone = b.worker_line(b.HOSTS["stone"], 47111)
     assert stone.startswith("source ~/labour/env.sh; ") and f"PYTHONPATH=/home/david/labour/{b.CRATE}:" in stone
-    assert "--slots 11" in stone and "setsid nohup" in stone and stone.endswith("< /dev/null &")
+    assert "--slots 7" in stone and "setsid nohup" in stone and stone.endswith("< /dev/null &")
     klip = b.worker_line(b.HOSTS["klip"], 47111)
     assert "--wrapper=scripts/runner/thermal_guard.sh" in klip and "--wrapper=--" in klip
     assert f"PYTHONPATH=/home/david/code/{b.CRATE}:/home/david/code/wt-studies:/home/david/code/wt-studies/ml " in klip

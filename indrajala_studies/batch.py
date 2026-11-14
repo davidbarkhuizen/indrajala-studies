@@ -269,7 +269,9 @@ CRATE = "crate-647f23c"
 # The owner's rules as data (2026-10-22; jebel on the grid around the clock since 2026-10-23): stone weekday nights and all weekend,
 # the laptops always; slots are cores less the worker's, bounded by memory (pyramidon and klip 5 GB):
 # klip all its cores (the owner: "klip always on, all cores", <= 85 C under the thermal guard; about
-# 220 MB a paper-cell run, 7 runs about 1.5 GB), pyramidon 3 beside development.
+# 220 MB a paper-cell run, 7 runs about 1.5 GB), pyramidon 3 beside development. stone at 70% (the owner,
+# 2026-11-10: 8 of its 12 threads, 7 slots and the worker's), its python its ml clone's venv (the
+# wt-branches worktree, whose venv it used, was removed 2026-11-14).
 # The worktree is wt-studies: each host's wt-batch is a worktree of its ml clone from before the separation.
 HOSTS: dict[str, Host] = {
     "pyramidon": Host(
@@ -301,9 +303,9 @@ HOSTS: dict[str, Host] = {
     ),
     "stone": Host(
         "stone",
-        11,
+        7,
         "/home/david/labour/code/wt-studies",
-        "/home/david/labour/code/wt-branches/.venv/bin/python",
+        "/home/david/labour/code/indrajala-ml/.venv/bin/python",
         "/home/david/labour/batch-attempts",
         pythonpath=f"/home/david/labour/{CRATE}",
         setup="source ~/labour/env.sh",
