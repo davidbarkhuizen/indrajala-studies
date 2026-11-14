@@ -1506,6 +1506,16 @@ def main(argv: list[str]) -> int:
     )
     sign.add_argument("pairs", type=Path, nargs="+", help="logs in pairs: FIRST SECOND, sharing a seed (or machine)")
     sign.add_argument("--sided", choices=("two", "greater"), default="two", help="greater: the first wins more")
+    clustering = commands.add_parser(
+        "seed-clustering",
+        help="backdrops run on the same seeds, each with its failed seeds: the seeds failing on two or more, and "
+        "the share of shuffles with as many (the programme review's O4; a probe, post hoc)",
+    )
+    clustering.add_argument("--seeds", required=True, metavar="FIRST-LAST", help="the seeds every backdrop ran")
+    clustering.add_argument(
+        "--failed", nargs="+", required=True, metavar="S,S,...", help="each backdrop's failed seeds, comma-separated"
+    )
+    clustering.add_argument("--shuffles", type=int, default=200_000)
     order = commands.add_parser(
         "order",
         help="machines' order from answers alone: the answer's entropy given the last k tokens against random "
@@ -1882,6 +1892,12 @@ def main(argv: list[str]) -> int:
             for t, q, cost_t in cost["curve"]:
                 print(f"t {t:g}: q {q:.3f}, l {cost_t:.1f}", flush=True)
         print(mf.restart_summary(cost, args.clock), flush=True)
+        return 0
+    if args.command == "seed-clustering":
+        first, _, last = args.seeds.partition("-")
+        failed = [{int(x) for x in found.split(",") if x} for found in args.failed]
+        observed, p = mf.seed_clustering(range(int(first), int(last or first) + 1), failed, args.shuffles)
+        print(f"{observed} seeds fail on two backdrops or more; {args.shuffles} shuffles: p {p:.4g}", flush=True)
         return 0
     if args.command == "cross-fitted-cost":
         courses = [_course(path) for path in args.logs]

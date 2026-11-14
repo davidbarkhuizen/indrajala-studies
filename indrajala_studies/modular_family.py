@@ -1895,6 +1895,174 @@ def machine_unit_readout(
     return lines
 
 
+@dataclass(frozen=True)
+class ToldTest:
+    """One of the told plan's stage 1 registered tests: a target's two arms, the first tested against the second."""
+
+    name: str
+    target: str  # "division" (seeds paired, McNemar's exact) or "machines" (machines paired, the signed rank)
+    first: str
+    second: str
+    sided: str  # "greater": the first more often; "two"
+
+
+# the told plan's stage 1 (indrajala-research docs/workplans/what-is-told-workplan.md): the five tests, Holm
+# over the five; arms named as the backdrops' (`told-d5-<arm>`, `told-<arm>-<machine>`)
+TOLD_TESTS = (
+    ToldTest("information, division", "division", "matched", "quotient", "greater"),
+    ToldTest("information, planted", "machines", "matched", "alone", "greater"),
+    ToldTest("congruence, division", "division", "sum", "matched", "two"),
+    ToldTest("congruence, planted", "machines", "planted", "matched", "two"),
+    ToldTest("given against not given", "machines", "planted", "alone", "greater"),
+)
+TOLD_ALPHA = 0.05
+# each target's approximation, its matched partition and the answers alone (the readings' arms)
+TOLD_ARMS = {"division": ("sum", "matched", "quotient"), "machines": ("planted", "matched", "alone")}
+
+
+def told_differences(
+    test: ToldTest, division: Mapping[str, Mapping[int, bool]], machines: Mapping[str, Mapping[int, int]]
+) -> list[int]:
+    """A test's paired differences, first minus second: per seed shared (division: each 1, 0 or -1), or per machine (successes)."""
+    if test.target == "division":
+        a, b = division[test.first], division[test.second]
+        return [int(a[s]) - int(b[s]) for s in sorted(set(a) & set(b))]
+    a, b = machines[test.first], machines[test.second]
+    return [a[m] - b[m] for m in sorted(set(a) & set(b))]
+
+
+def _paired_interval(differences: Sequence[int], resamples: int, seed: str) -> tuple[float, float]:
+    """A percentile 95% bootstrap interval of the mean paired difference, the units resampled, keyed by `seed`."""
+    if not differences:
+        return (0.0, 0.0)
+    rng = random.Random(seed)
+    means = sorted(sum(rng.choices(differences, k=len(differences))) / len(differences) for _ in range(resamples))
+    return means[int(0.025 * resamples)], means[min(resamples - 1, int(0.975 * resamples))]
+
+
+def told_tests(
+    division: Mapping[str, Mapping[int, bool]],
+    machines: Mapping[str, Mapping[int, int]],
+    resamples: int = 10_000,
+) -> list[dict[str, Any]]:
+    """
+    The told plan's stage 1 tests (TOLD_TESTS), each on its paired units: at p 5 McNemar's exact test
+    over the seeds shared (`division`: arm -> seed -> succeeded); on the planted machines the exact
+    signed-rank test over the machines' differences in successful runs (`machines`: arm -> machine ->
+    successes); each p Holm-adjusted over the five; each difference's mean with a bootstrap 95% interval.
+    """
+    found: list[dict[str, Any]] = []
+    for test in TOLD_TESTS:
+        differences = told_differences(test, division, machines)
+        if test.target == "division":
+            p = inference.mcnemar_exact(differences.count(1), differences.count(-1), test.sided)
+        else:
+            p = inference.signed_rank([float(d) for d in differences], test.sided)
+        found.append(
+            {
+                "test": test,
+                "units": len(differences),
+                "mean": sum(differences) / len(differences) if differences else 0.0,
+                "interval": _paired_interval(differences, resamples, f"told-{test.name}"),
+                "p": p,
+            }
+        )
+    for result, adjusted in zip(found, inference.holm([r["p"] for r in found]), strict=True):
+        result["holm"] = adjusted
+    return found
+
+
+def told_reading(results: Sequence[Mapping[str, Any]], target: str) -> str:
+    """
+    A target's reading, fixed at registration (the told plan's stage 1): "information" if its matched
+    partition helps (the information test holds, Holm at TOLD_ALPHA) and the approximation doesn't beat
+    it; "congruence" if the approximation beats the partition (the congruence test holds, the mean
+    difference positive) and the partition doesn't help; "both"; "the partition beats the approximation"
+    if the congruence test holds the other way (outside the four readings, reported as such); else
+    "undecided".
+    """
+    information = next(r for r in results if r["test"].target == target and r["test"].name.startswith("information"))
+    congruence = next(r for r in results if r["test"].target == target and r["test"].name.startswith("congruence"))
+    helps = information["holm"] <= TOLD_ALPHA
+    held = congruence["holm"] <= TOLD_ALPHA
+    if held and congruence["mean"] < 0:
+        return "the partition beats the approximation"
+    beats = held and congruence["mean"] > 0
+    return {(True, True): "both", (True, False): "information", (False, True): "congruence"}.get(
+        (helps, beats), "undecided"
+    )
+
+
+def told_lines(
+    division: Mapping[str, Mapping[int, bool]],
+    machines: Mapping[str, Mapping[int, int]],
+    resamples: int = 10_000,
+) -> list[str]:
+    """told_tests and each target's reading, a line each: the counts, each test, the two readings."""
+    lines: list[str] = []
+    for arm, runs in division.items():
+        lines.append(f"division {arm}: {sum(runs.values())} of {len(runs)} seeds succeeded")
+    for arm, counts in machines.items():
+        lines.append(
+            f"planted {arm}: {sum(1 for c in counts.values() if c)} of {len(counts)} machines, "
+            f"{sum(counts.values())} runs succeeded"
+        )
+    results = told_tests(division, machines, resamples)
+    for r in results:
+        test, (low, high) = r["test"], r["interval"]
+        lines.append(
+            f"{test.name}: {test.first} against {test.second} ({test.sided}-sided), {r['units']} paired units, "
+            f"mean difference {r['mean']:+.3f} (95% {low:+.3f} to {high:+.3f}); p {r['p']:.4g}, Holm {r['holm']:.4g}"
+        )
+    for target in ("division", "machines"):
+        lines.append(
+            f"reading, {'division at p 5' if target == 'division' else 'planted machines'}: {told_reading(results, target)}"
+        )
+    return lines
+
+
+def told_cost_lines(courses: Mapping[str, Mapping[str, Mapping[Any, Course]]], resamples: int = 2000) -> list[str]:
+    """
+    The told plan's D3 measures beside stage 1's tests (registered beside the rate, D2): for each test,
+    the sign test on epochs to a certificate over its paired runs (a seed, or a machine and a seed),
+    sided as the test; for each arm, the cost per certificate at a cross-fitted cutoff, its runs in
+    their registered order (seed, or machine then seed). `courses`: target -> arm -> unit -> course.
+    """
+    lines: list[str] = []
+    for test in TOLD_TESTS:
+        a, b = courses[test.target][test.first], courses[test.target][test.second]
+        reading = epochs_sign([(a[u], b[u]) for u in sorted(set(a) & set(b))], test.sided)
+        lines.append(
+            f"{test.name}, epochs to a certificate: {test.first} wins {reading['wins']}, {test.second} "
+            f"{reading['losses']}, {reading['ties']} ties; sign test p {reading['p']:.4g}"
+        )
+    for target, arms in courses.items():
+        for arm, runs in arms.items():
+            cost = cross_fitted_cost([runs[u] for u in sorted(runs)], resamples, f"told-{target}-{arm}")
+            lines.append(f"{target} {arm}: {cross_fitted_summary(cost)}")
+    return lines
+
+
+def seed_clustering(
+    seeds: Sequence[int], failed: Sequence[Collection[int]], shuffles: int = 200_000, key: str = "seed-clustering"
+) -> tuple[int, float]:
+    """
+    The programme review's O4 reading: backdrops run on the same seeds, each with its failed seeds; the
+    statistic is the seeds failing on two backdrops or more; its p the share of shuffles (each
+    backdrop's failures redrawn among the seeds, as many, from a generator keyed by `key`) with a
+    statistic at least as large. Post hoc in the review; a probe, not a test, wherever it is run again.
+    """
+
+    def clustered(sets: Sequence[Collection[int]]) -> int:
+        counts = Counter(s for found in sets for s in found)
+        return sum(1 for c in counts.values() if c >= 2)
+
+    assert all(set(found) <= set(seeds) for found in failed), "every failed seed is one of the seeds"
+    observed, rng, pool = clustered(failed), random.Random(key), list(seeds)
+    hits = sum(clustered([rng.sample(pool, len(found)) for found in failed]) >= observed for _ in range(shuffles))
+    return observed, hits / shuffles
+
+
 def long_summary(root: Path) -> list[str]:
     """
     A study's long tests (long-test --out root/<run>, a <network>.long-test.json each): a line per
