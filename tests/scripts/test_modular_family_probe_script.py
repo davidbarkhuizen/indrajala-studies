@@ -77,3 +77,38 @@ def test_factor_shares_reads_a_trained_network_and_writes_every_share(
     read = json.loads(saved.read_text())
     assert len(read["factors"]) == 1 and set(read["factors"][0]["named"]) >= {"parity", "places {0}"}
     assert all(0.0 <= v <= 1.0 for v in read["factors"][0]["named"].values())
+
+
+def _log(path: Path, certified_at: int | None, end: int) -> Path:
+    """A run's log: one step end a curriculum step of `epochs`, certified at both verdicts at `certified_at`."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    done = certified_at is not None
+    rows = [
+        {"step": 1, "end": "epoch", "state_share": 1.0, "epochs": certified_at or end, "seconds": 1.0},
+        {
+            "step": 2,
+            "end": "passed" if done else "spent",
+            "state_share": 1.0,
+            "epochs": 0 if done else 1,  # a budget's stop logs one epoch not trained
+            "seconds": 2.0,
+            "certified": done,
+            "certificates": {"strict": {"certified": done}},
+        },
+    ]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    return path
+
+
+def test_epochs_sign_and_the_cross_fitted_cost_read_runs_logs(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    """The told plan's D3 measures from logs: pairs FIRST SECOND, and one arm's logs in registered order."""
+    fast, slow, spent = (
+        str(_log(tmp_path / n / "log.jsonl", at, 400)) for n, at in (("a", 10), ("b", 40), ("c", None))
+    )
+    assert script.main(["epochs-sign", fast, slow, fast, spent, spent, spent, "--sided", "greater"]) == 0
+    assert capsys.readouterr().out.strip() == (
+        "3 pairs: the first wins 2, the second 0, 1 ties; sign test (greater-sided) p 0.25"
+    )
+    with pytest.raises(SystemExit):
+        script.main(["epochs-sign", fast])
+    assert script.main(["cross-fitted-cost", fast, spent, slow, spent, "--resamples", "50"]) == 0
+    assert "4 runs (2 + 2), 2 certified as run; cross-fitted cutoffs 40, 10" in capsys.readouterr().out

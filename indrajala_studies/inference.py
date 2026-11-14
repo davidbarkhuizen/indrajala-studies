@@ -6,7 +6,10 @@ two samples (examples to pass), and Holm's correction over a family of tests. By
 Fisher's test and Mann-Whitney's without ties are exact, in integers; Cochran-Armitage and
 Mann-Whitney with ties take the normal approximation. The paper workplan's T10 (D19) adds exact
 one-sided rank tests with ties (midranks), for small samples of tied counts: the rank sum of two
-samples and the signed rank of paired ones, each a permutation test counted in integers.
+samples and the signed rank of paired ones, each a permutation test counted in integers. The told
+plan (indrajala-research docs/workplans/what-is-told-workplan.md, D3 and stage 1) adds the exact sign
+test of paired outcomes, McNemar's exact test as that test on discordant pairs, and the signed rank
+two-sided.
 """
 
 from __future__ import annotations
@@ -192,6 +195,51 @@ def signed_rank_greater(differences: Sequence[float]) -> float:
             following[total + rank] = following.get(total + rank, 0) + count
         ways = following
     return float(Fraction(sum(c for total, c in ways.items() if total >= observed), 2 ** len(nonzero)))
+
+
+def binomial_greater(k: int, n: int) -> float:
+    """P(X >= k) for X ~ Binomial(n, 1/2), exactly as integers: a sign test's upper tail."""
+    assert k >= 0 and n >= 0
+    return float(Fraction(sum(math.comb(n, x) for x in range(k, n + 1)), 2**n))
+
+
+def sign_test(wins: int, losses: int, sided: str = "two") -> float:
+    """
+    The exact sign test of paired outcomes, ties dropped before (the told plan's D3): `wins` pairs
+    the first arm won, `losses` the second. "greater": the first wins more often, one-sided; "two":
+    twice the smaller tail, at most 1. No untied pair: 1. McNemar's exact test is this test on the
+    discordant pairs (mcnemar_exact).
+    """
+    assert sided in ("greater", "two") and min(wins, losses) >= 0
+    n = wins + losses
+    if n == 0:
+        return 1.0
+    if sided == "greater":
+        return binomial_greater(wins, n)
+    return min(1.0, 2 * min(binomial_greater(wins, n), binomial_greater(losses, n)))
+
+
+def mcnemar_exact(first_only: int, second_only: int, sided: str = "two") -> float:
+    """
+    McNemar's exact test of two arms' paired binary outcomes (seeds shared by both arms; the told
+    plan's stage 1 at p 5): only the discordant pairs count, `first_only` working in the first arm
+    alone and `second_only` in the second alone; the sign test on them.
+    """
+    return sign_test(first_only, second_only, sided)
+
+
+def signed_rank(differences: Sequence[float], sided: str = "two") -> float:
+    """
+    The exact Wilcoxon signed-rank test of paired differences (signed_rank_greater's counting):
+    "greater", that they tend positive; "two", twice the smaller tail, at most 1. No nonzero
+    difference: 1.
+    """
+    assert sided in ("greater", "two")
+    if sided == "greater":
+        return signed_rank_greater(differences)
+    if not any(differences):
+        return 1.0
+    return min(1.0, 2 * min(signed_rank_greater(differences), signed_rank_greater([-d for d in differences])))
 
 
 def holm(p_values: Sequence[float]) -> list[float]:
