@@ -49,3 +49,44 @@ def test_a_cells_prefix_is_read_and_a_continuous_cell_has_no_machine() -> None:
     assert script.group("approximation.d5-family-wide-301") == "approximation.d5-family-wide"
     assert not script.coded("approximation-continuous.d5-family-wide-300")
     assert script.coded("approximation-linear.d5-family-wide-300") and script.coded("s3-300")
+
+
+def test_the_probe_is_this_repositorys_and_a_machines_vocabulary_is_read_with_its_networks() -> None:
+    """The probe moved here from ml (2026-10-31); the told plan's machine arms are read on their vocabulary."""
+    assert script.PROBE.exists()
+    assert script.task_args(BACKDROPS["told-matched-54"]) == [
+        "--task",
+        "random-planted-q16-b4-54",
+        "--arm",
+        "matched",
+        "--vocabulary",
+        "planted",
+        "matched",
+    ]
+    assert script.task_args(BACKDROPS["t10-p2-0"]) == ["--task", "random-planted-q16-b4-0", "--arm", "planted"]
+
+
+def test_told_reads_a_batchs_runs_into_the_five_tests_and_the_cost_measures(tmp_path: Path) -> None:
+    """Stage 1's reading wired to a batch's links: here every run spent its budget, so nothing succeeds."""
+    import json
+
+    def spent(directory: Path) -> None:
+        directory.mkdir(parents=True)
+        rows = [{"step": 1, "end": "spent", "state_share": 0.5, "epochs": 401, "seconds": 1.0}]
+        (directory / "log.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+    for arm in ("quotient", "sum", "matched"):
+        for seed in (800, 801):
+            spent(tmp_path / "runs" / f"told-d5-{arm}" / f"seed{seed}")
+    for arm in ("alone", "planted", "matched"):
+        for machine in (54, 55):
+            spent(tmp_path / "runs" / f"told-{arm}-{machine}" / "seed840")
+    (tmp_path / "certify").mkdir()
+    (tmp_path / "long-tests").mkdir()
+    lines = script.told(tmp_path)
+    assert lines[0] == "division sum: 0 of 2 seeds succeeded"
+    assert "planted alone: 0 of 2 machines, 0 runs succeeded" in lines
+    assert sum("Holm 1" in line for line in lines) == 5
+    assert "reading, division at p 5: undecided" in lines and "reading, planted machines: undecided" in lines
+    assert sum("2 runs (1 + 1), 0 certified as run" in line for line in lines) == 6  # each arm's cost
+    assert sum("0 ties" not in line and "ties" in line for line in lines) == 5  # each test's epochs, all tied

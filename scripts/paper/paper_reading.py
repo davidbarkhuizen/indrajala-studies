@@ -20,9 +20,14 @@ its backdrop (`indrajala_studies.batch.BACKDROPS`, by the attempt's name `<backd
   T10, T10r), its backdrops `<T>-<arm>-<machine>`, read from DATA/runs (after `links`) with the
   recertifications and long tests: each arm's machines and runs succeeding, and each pair's exact
   one-sided rank-sum test over the machines' counts, Holm-adjusted (mf.machine_unit_readout).
+- `told DATA`: the told plan's stage 1 (indrajala-research docs/workplans/what-is-told-workplan.md),
+  read from DATA/runs (after `links`) with the recertifications and long tests: the five registered
+  tests, Holm over the five, each target's reading (mf.told_lines), and D3's measures beside them
+  (mf.told_cost_lines).
 """
 
 import argparse
+import json
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -33,8 +38,8 @@ from pathlib import Path
 from indrajala_studies import modular_family as mf
 from indrajala_studies.batch import BACKDROPS, CELLS, Backdrop
 
-# the batch runner's probe, which stays in ml (the studies-repo workplan)
-PROBE = Path(__file__).resolve().parents[2] / "ml" / "scripts" / "studies" / "modular_family_probe.py"
+# the batch runner's probe, in this repository since the research separation (2026-10-31)
+PROBE = Path(__file__).resolve().parents[2] / "scripts" / "studies" / "modular_family_probe.py"
 
 
 @dataclass(frozen=True)
@@ -89,10 +94,10 @@ def networks(data: Path) -> Iterator[Network]:
 
 
 def task_args(backdrop: Backdrop) -> list[str]:
-    """The reading's arguments for a backdrop's networks: its task, and division's arm and vocabulary."""
-    if not backdrop.division:
-        return ["--task", backdrop.task, *([] if backdrop.arm == "family" else ["--arm", backdrop.arm])]
+    """The reading's arguments for a backdrop's networks: its task, its arm and its vocabulary (a machine's too: the told plan's)."""
     vocabulary = ["--vocabulary", *backdrop.vocabulary] if backdrop.vocabulary else []
+    if not backdrop.division:
+        return ["--task", backdrop.task, *([] if backdrop.arm == "family" else ["--arm", backdrop.arm]), *vocabulary]
     return ["--task", backdrop.task, "--arm", backdrop.arm, *vocabulary]
 
 
@@ -114,10 +119,49 @@ def probe(*args: str | Path, log: Path | None = None) -> int:
         return subprocess.run(command, stdout=out, stderr=subprocess.STDOUT, check=False).returncode
 
 
+def told(data: Path) -> list[str]:
+    """
+    The told plan's stage 1 from a batch (after `links`, `certify` and `long`): at p 5 each arm's seeds
+    succeeded (mf.ArmRun.succeeded), on the planted machines each arm's machines' successes, the
+    tests and readings (mf.told_lines); then D3's measures from the runs' logs (mf.told_cost_lines).
+    """
+    runs, verdicts, long = data / "runs", mf.recertifications(data / "certify"), mf.long_tested(data / "long-tests")
+    division = {
+        arm: {r.seed: r.succeeded for r in mf.arm_runs(runs, f"told-d5-{arm}", verdicts, long)}
+        for arm in mf.TOLD_ARMS["division"]
+    }
+    found = mf.machine_unit_runs(runs, "told", mf.TOLD_ARMS["machines"], verdicts, long)
+    machines = {arm: {m: sum(r.succeeded for r in found[arm][m]) for m in found[arm]} for arm in found}
+
+    def course(log: Path) -> mf.Course:
+        made = mf.restart_course([json.loads(line) for line in log.read_text().splitlines()])
+        assert made is not None, f"{log}: no step ends"
+        return made
+
+    def seed(log: Path) -> int:
+        return int(log.parent.name.removeprefix("seed"))
+
+    courses = {
+        "division": {
+            arm: {seed(log): course(log) for log in (runs / f"told-d5-{arm}").glob("seed*/log.jsonl")}
+            for arm in mf.TOLD_ARMS["division"]
+        },
+        "machines": {
+            arm: {
+                (m, seed(log)): course(log)
+                for m in found[arm]
+                for log in (runs / f"told-{arm}-{m}").glob("seed*/log.jsonl")
+            }
+            for arm in mf.TOLD_ARMS["machines"]
+        },
+    }
+    return [*mf.told_lines(division, machines), *mf.told_cost_lines(courses)]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("plan", "links", "certify", "approximations", "proof", "long", "machines"):
+    for name in ("plan", "links", "certify", "approximations", "proof", "long", "machines", "told"):
         command = sub.add_parser(name)
         command.add_argument("data", type=Path)
         if name == "certify":
@@ -130,6 +174,10 @@ def main() -> None:
             command.add_argument("--pairs", nargs="+", required=True, metavar="A:B", help="A tends larger than B")
     args = parser.parse_args()
     data: Path = args.data
+    if args.command == "told":
+        for line in told(data):
+            print(line)
+        return
     if args.command == "machines":
         runs = mf.machine_unit_runs(
             data / "runs",

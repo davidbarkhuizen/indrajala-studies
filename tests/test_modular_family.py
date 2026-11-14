@@ -2761,3 +2761,64 @@ def test_a_runs_identity_names_its_defaults_alone_and_every_other_setting():
         "coupling_pace": True, "reheat": True, "incremental_reheat": True, "margin_wait": 3, "cutoff_epochs": 50,
         "baseline": "b", "recombine": True, "branch_heads": 2,
     }  # fmt: skip
+
+
+def test_the_told_tests_pair_seeds_and_machines_and_read_each_target():
+    """
+    The told plan's stage 1 on made-up counts: at p 5 the sum certifies seeds 0-19, its matched partition
+    0-9 and the answers alone 0-1 of 40 (McNemar's: 8 against 0 one-sided, 10 against 0 two-sided); on 25
+    machines the planted arm succeeds twice on 10 and the others never (signed rank: 10 differences of 2).
+    Holm over the five keeps all but the planted information test: division "both", planted "congruence".
+    """
+    division = {
+        "sum": {s: s < 20 for s in range(40)},
+        "matched": {s: s < 10 for s in range(40)},
+        "quotient": {s: s < 2 for s in range(40)},
+    }
+    machines = {
+        "planted": {m: 2 if m < 10 else 0 for m in range(25)},
+        "matched": dict.fromkeys(range(25), 0),
+        "alone": dict.fromkeys(range(25), 0),
+    }
+    results = {r["test"].name: r for r in mf.told_tests(division, machines, resamples=500)}
+    assert results["information, division"]["p"] == 1 / 256
+    assert results["congruence, division"]["p"] == 2 / 1024
+    assert results["given against not given"]["p"] == 1 / 1024 and results["congruence, planted"]["p"] == 2 / 1024
+    assert results["information, planted"]["p"] == 1.0 and results["information, planted"]["units"] == 25
+    assert results["congruence, division"]["mean"] == 0.25 and results["congruence, division"]["units"] == 40
+    low, high = results["congruence, division"]["interval"]
+    assert 0 < low <= 0.25 <= high
+    assert max(r["holm"] for name, r in results.items() if name != "information, planted") <= mf.TOLD_ALPHA
+    found = list(results.values())
+    assert (mf.told_reading(found, "division"), mf.told_reading(found, "machines")) == ("both", "congruence")
+    swapped = {**division, "sum": division["matched"], "matched": division["sum"]}  # the partition beats the sum
+    assert mf.told_reading(mf.told_tests(swapped, machines, 100), "division") == "the partition beats the approximation"
+    lines = mf.told_lines(division, machines, resamples=100)
+    assert "reading, division at p 5: both" in lines and "reading, planted machines: congruence" in lines
+
+
+def test_the_told_cost_lines_pair_runs_by_unit_and_cut_each_arm_in_registered_order():
+    fast, spent = (10.0, 10.0, False), (None, 400.0, True)
+    courses = {
+        "division": {
+            arm: {s: fast if arm != "quotient" else spent for s in range(4)} for arm in ("sum", "matched", "quotient")
+        },
+        "machines": {arm: {(m, 1): spent for m in range(2)} for arm in ("planted", "matched", "alone")},
+    }
+    lines = mf.told_cost_lines(courses, resamples=50)
+    assert (
+        lines[0]
+        == "information, division, epochs to a certificate: matched wins 4, quotient 0, 0 ties; sign test p 0.0625"
+    )
+    assert lines[2].startswith("congruence, division, epochs to a certificate: sum wins 0, matched 0, 4 ties")
+    assert "division sum: 4 runs (2 + 2), 4 certified as run; cross-fitted cutoffs 10, 10: 10 epochs" in lines[5]
+
+
+def test_seed_clustering_reproduces_the_programme_reviews_o4():
+    """T2's failures at p 7, 11 and 13 on seeds 300-319: five seeds fail twice, p about 0.003 (the review's)."""
+    failed = [{306, 307, 310}, {303, 314, 315, 316}, {303, 306, 310, 314, 315}]
+    observed, p = mf.seed_clustering(range(300, 320), failed, 20_000)
+    assert observed == 5 and 0.001 < p < 0.006
+    assert mf.seed_clustering(range(300, 320), failed, 20_000) == (observed, p)  # keyed
+    with pytest.raises(AssertionError):
+        mf.seed_clustering(range(300, 310), failed, 10)
