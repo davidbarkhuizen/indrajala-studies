@@ -2253,6 +2253,41 @@ def test_same_prefix_reads_a_paired_arms_rows_against_its_control_but_for_second
     assert mf.same_prefix(control[:2], control)["differs"] == 3  # the longer log's next row
 
 
+def test_epochs_sign_pairs_runs_a_certificate_beating_a_spent_run_and_fewer_epochs_more():
+    """The told plan's D3: two uncertified runs tie (dropped); a certified run beats one that isn't."""
+    certified, slow, spent, stopped = (10.0, 10.0, False), (40.0, 40.0, False), (None, 400.0, True), (None, 90.0, False)
+    assert [mf.epochs_winner(a, b) for a, b in ((certified, slow), (slow, certified), (spent, stopped))] == [1, -1, 0]
+    assert (mf.epochs_winner(certified, spent), mf.epochs_winner(stopped, slow), mf.epochs_winner(slow, slow)) == (
+        1,
+        -1,
+        0,
+    )
+    reading = mf.epochs_sign([(certified, slow)] * 9 + [(spent, slow), (spent, spent)], "greater")
+    assert (reading["wins"], reading["losses"], reading["ties"]) == (9, 1, 1)
+    assert reading["p"] == 11 / 1024
+
+
+def test_the_cross_fitted_cost_cuts_each_half_at_the_other_halfs_optimum():
+    """
+    The told plan's D3, worked by hand: the second half's t* is 30 (l 52.5 against 60 at 15), the
+    first's 20 (35 against 40 at 10); the first half spends 10 + 30 + 20 + 30 keeping 2, the second
+    15 + 20 + 20 + 20 keeping 1 (30 is past its cutoff): 165 / 3 = 55 epochs a certificate, against
+    475 / 4 as run.
+    """
+    first = [(10.0, 10.0, False), (None, 100.0, True), (20.0, 20.0, False), (None, 100.0, True)]
+    second = [(15.0, 15.0, False), (None, 100.0, True), (30.0, 30.0, False), (None, 100.0, True)]
+    cost = mf.cross_fitted_cost([*first, *second], resamples=200)
+    assert cost["cutoffs"] == (30.0, 20.0) and cost["cost"] == 55.0
+    assert cost["as_run"] == 475 / 4 and cost["certified"] == 4 and cost["halves"] == (4, 4)
+    low, high = cost["interval"]
+    assert low is not None and low <= 55.0 and (high is None or high >= 55.0)
+    assert cost == mf.cross_fitted_cost([*first, *second], resamples=200)  # the bootstrap is keyed, not random
+    assert "cross-fitted cutoffs 30, 20: 55 epochs per certificate" in mf.cross_fitted_summary(cost)
+    none = mf.cross_fitted_cost([(None, 100.0, True)] * 4, resamples=10)
+    assert none["cost"] is None and none["cutoffs"] == (None, None) and none["interval"] == (None, None)
+    assert "- epochs per certificate" in mf.cross_fitted_summary(none)
+
+
 def test_restart_cost_finds_lubys_cutoff_and_reads_censored_runs_only_to_the_shortest():
     def step(
         n: int, seconds: float, end: str = "epoch", certified: bool = False, strict: bool = False

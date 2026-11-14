@@ -994,7 +994,10 @@ def formation_summary(course: Mapping[str, Any] | None) -> str:
     )
 
 
-def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> tuple[float | None, float, bool] | None:
+Course = tuple[float | None, float, bool]  # restart_course's: time to success (None: never), its end, censored there
+
+
+def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> Course | None:
     """
     A run as a restart attempt, on `clock` ("epochs" trained in all, the budget's unit and the time
     axis, the owner 2026-10-23; "steps"; or "seconds", money not time), from its log.jsonl: its time
@@ -1024,7 +1027,7 @@ def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> 
     return (None if hit is None else at(hit)), at(steps[-1]), hit is None and steps[-1]["end"] in CENSORED
 
 
-def restart_cost(runs: Sequence[tuple[float | None, float, bool]]) -> dict[str, Any]:
+def restart_cost(runs: Sequence[Course]) -> dict[str, Any]:
     """
     Luby, Sinclair and Zuckerman's expected cost per success of fresh-seed restarts at a fixed cutoff
     `t` (a certified run is a Las Vegas run: right whenever it stops): `l(t) = E[min(T, t)] / q(t)`,
@@ -1053,6 +1056,111 @@ def restart_cost(runs: Sequence[tuple[float | None, float, bool]]) -> dict[str, 
         "best": best,
         "run_out": sum(end if s is None else s for s, end, _ in runs) / len(successes) if successes else None,
     }
+
+
+def epochs_winner(first: Course, second: Course) -> int:
+    """
+    The told plan's D3 pairing of two runs sharing a seed (or a machine and a seed): 1 if the first
+    certified in fewer epochs, or certified where the second didn't; -1 the other way; 0 a tie (the
+    same epochs, or neither certified), dropped by the sign test.
+    """
+    a, b = first[0], second[0]
+    if a is None and b is None:
+        return 0
+    if a is None or b is None:
+        return 1 if b is None else -1
+    return (a < b) - (a > b)
+
+
+def epochs_sign(pairs: Sequence[tuple[Course, Course]], sided: str = "two") -> dict[str, Any]:
+    """The told plan's D3 sign test on epochs to a certificate, over paired runs (epochs_winner)."""
+    outcomes = [epochs_winner(a, b) for a, b in pairs]
+    wins, losses = outcomes.count(1), outcomes.count(-1)
+    return {
+        "pairs": len(pairs),
+        "wins": wins,
+        "losses": losses,
+        "ties": outcomes.count(0),
+        "p": inference.sign_test(wins, losses, sided),
+        "sided": sided,
+    }
+
+
+def _cutoff(runs: Sequence[Course]) -> float | None:
+    """restart_cost's optimal fixed cutoff t* on these runs, or None (no cutoff: run to the end) if none certified."""
+    best = restart_cost(runs)["best"] if runs else None
+    return None if best is None else float(best[0])
+
+
+def _spent(runs: Sequence[Course], cutoff: float | None) -> tuple[float, int]:
+    """The epochs these runs spend under a cutoff (None: each to its end), and the certificates kept."""
+    if cutoff is None:
+        return sum(end if s is None else s for s, end, _ in runs), sum(1 for s, _, _ in runs if s is not None)
+    return (
+        sum(min(end if s is None else s, cutoff) for s, end, _ in runs),
+        sum(1 for s, _, _ in runs if s is not None and s <= cutoff),
+    )
+
+
+def cross_fitted_cost(runs: Sequence[Course], resamples: int = 2000, seed: str = "cross-fitted-cost") -> dict[str, Any]:
+    """
+    The told plan's D3 cost per certificate at a cross-fitted cutoff: an arm's runs, in their
+    registered order, split in two (the first half, the rest); each half's cutoff, in epochs, is the
+    one minimising the other half's restart cost (restart_cost's t*; none if the other half certified
+    nothing); the cost is the epochs both halves spend under their cutoffs over the certificates they
+    keep (None if none kept). Beside it the cost as run (each run to its end) and a percentile 95%
+    bootstrap interval of the cross-fitted cost, each half resampled within itself, `resamples` times
+    from a generator keyed by `seed` (an interval end None when a share of resamples kept nothing).
+    """
+
+    def fitted(first: Sequence[Course], second: Sequence[Course]) -> tuple[float | None, float | None, float | None]:
+        cut_first, cut_second = _cutoff(second), _cutoff(first)
+        spent_first, kept_first = _spent(first, cut_first)
+        spent_second, kept_second = _spent(second, cut_second)
+        kept = kept_first + kept_second
+        return cut_first, cut_second, (spent_first + spent_second) / kept if kept else None
+
+    half = len(runs) // 2
+    first, second = list(runs[:half]), list(runs[half:])
+    cut_first, cut_second, cost = fitted(first, second)
+    spent, kept = _spent(runs, None)
+    rng = random.Random(seed)
+    costs: list[float] = []
+    for _ in range(resamples if first and second else 0):
+        drawn = fitted(rng.choices(first, k=len(first)), rng.choices(second, k=len(second)))[2]
+        costs.append(math.inf if drawn is None else drawn)
+    costs.sort()
+
+    def percentile(share: float) -> float | None:
+        if not costs:
+            return None
+        value = costs[min(len(costs) - 1, int(share * len(costs)))]
+        return None if math.isinf(value) else value
+
+    return {
+        "runs": len(runs),
+        "halves": (len(first), len(second)),
+        "cutoffs": (cut_first, cut_second),
+        "cost": cost,
+        "certified": kept,
+        "as_run": spent / kept if kept else None,
+        "interval": (percentile(0.025), percentile(0.975)),
+    }
+
+
+def cross_fitted_summary(cost: Mapping[str, Any]) -> str:
+    """cross_fitted_cost's reading on one line, in epochs."""
+
+    def shown(x: float | None) -> str:
+        return "-" if x is None else f"{x:.0f}"
+
+    low, high = cost["interval"]
+    cuts = ", ".join("none" if c is None else f"{c:g}" for c in cost["cutoffs"])
+    return (
+        f"{cost['runs']} runs ({cost['halves'][0]} + {cost['halves'][1]}), {cost['certified']} certified as run; "
+        f"cross-fitted cutoffs {cuts}: {shown(cost['cost'])} epochs per certificate "
+        f"(95% {shown(low)}-{shown(high) if high is not None else 'inf'}), as run {shown(cost['as_run'])}"
+    )
 
 
 def restart_summary(cost: Mapping[str, Any], unit: str = "steps") -> str:

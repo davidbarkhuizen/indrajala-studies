@@ -139,3 +139,20 @@ def test_the_exact_signed_rank_test_is_the_share_of_sign_assignments_at_least_as
     signs = list(itertools.product((0, 1), repeat=len(ranks)))
     brute = sum(sum(r for r, s in zip(ranks, sign, strict=True) if s) >= observed - 1e-9 for sign in signs) / len(signs)
     assert st.signed_rank_greater(differences) == pytest.approx(brute)
+
+
+def test_the_sign_test_is_exact_and_mcnemars_is_it_on_discordant_pairs():
+    """The told plan's D3 and stage 1: 9 wins against 1 is 11/1024 one-sided, twice that two-sided."""
+    assert st.binomial_greater(9, 10) == 11 / 1024
+    assert st.sign_test(9, 1, "greater") == 11 / 1024 and st.sign_test(9, 1) == 22 / 1024
+    assert st.sign_test(1, 9) == st.sign_test(9, 1) and st.sign_test(1, 9, "greater") == 1023 / 1024
+    assert st.sign_test(0, 0) == st.sign_test(0, 0, "greater") == 1.0 and st.sign_test(3, 3) == 1.0
+    assert st.mcnemar_exact(9, 1, "greater") == st.sign_test(9, 1, "greater")
+
+
+def test_the_signed_rank_two_sided_doubles_the_smaller_tail():
+    differences = [2, 1, 1, 0, -1, 2, 2]
+    greater, less = st.signed_rank_greater(differences), st.signed_rank_greater([-d for d in differences])
+    assert st.signed_rank(differences) == min(1.0, 2 * min(greater, less))
+    assert st.signed_rank(differences, "greater") == greater
+    assert st.signed_rank([0, 0]) == 1.0 and st.signed_rank([1, -1]) == 1.0

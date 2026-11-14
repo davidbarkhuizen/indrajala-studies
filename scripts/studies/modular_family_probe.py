@@ -1492,6 +1492,20 @@ def main(argv: list[str]) -> int:
         help="the cost's unit: epochs trained (the time axis), steps, or seconds (money, not time)",
     )
     restarts.add_argument("--curve", action="store_true", help="every cutoff's q(t) and l(t), a line each")
+    fitted = commands.add_parser(
+        "cross-fitted-cost",
+        help="one arm's runs' logs, in their registered order: the told plan's D3 cost per certificate at a "
+        "cross-fitted cutoff (each half's cutoff the other half's t*), the cost as run, a bootstrap interval",
+    )
+    fitted.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl, in the registered order")
+    fitted.add_argument("--resamples", type=int, default=2000, help="bootstrap resamples")
+    sign = commands.add_parser(
+        "epochs-sign",
+        help="paired runs' logs: the told plan's D3 sign test on epochs to a certificate (a certified run beats "
+        "a spent one; fewer epochs beats more; two uncertified runs tie, dropped)",
+    )
+    sign.add_argument("pairs", type=Path, nargs="+", help="logs in pairs: FIRST SECOND, sharing a seed (or machine)")
+    sign.add_argument("--sided", choices=("two", "greater"), default="two", help="greater: the first wins more")
     order = commands.add_parser(
         "order",
         help="machines' order from answers alone: the answer's entropy given the last k tokens against random "
@@ -1868,6 +1882,21 @@ def main(argv: list[str]) -> int:
             for t, q, cost_t in cost["curve"]:
                 print(f"t {t:g}: q {q:.3f}, l {cost_t:.1f}", flush=True)
         print(mf.restart_summary(cost, args.clock), flush=True)
+        return 0
+    if args.command == "cross-fitted-cost":
+        courses = [_course(path) for path in args.logs]
+        print(mf.cross_fitted_summary(mf.cross_fitted_cost(courses, args.resamples)), flush=True)
+        return 0
+    if args.command == "epochs-sign":
+        if len(args.pairs) % 2:
+            raise SystemExit("epochs-sign: give logs in pairs, FIRST SECOND")
+        pairs = [(_course(a), _course(b)) for a, b in zip(args.pairs[::2], args.pairs[1::2], strict=True)]
+        reading = mf.epochs_sign(pairs, args.sided)
+        print(
+            f"{reading['pairs']} pairs: the first wins {reading['wins']}, the second {reading['losses']}, "
+            f"{reading['ties']} ties; sign test ({reading['sided']}-sided) p {reading['p']:.4g}",
+            flush=True,
+        )
         return 0
     if args.command == "cool":
         for path in args.logs:
@@ -2258,6 +2287,14 @@ def told_line(task: str, arm: str) -> str:
     )
     shown = "not a function of the state" if told is None else f"{told} / {machine.states}"
     return f"{task} {arm}: told {shown}; {kinds or 'no queries'}"
+
+
+def _course(path: Path) -> mf.Course:
+    """A run's restart course in epochs from its log; a log with no step end is a run that never trained: refused."""
+    course = mf.restart_course([json.loads(line) for line in path.read_text().splitlines()])
+    if course is None:
+        raise SystemExit(f"{path}: no step ends")
+    return course
 
 
 def _target(task: str, args: argparse.Namespace) -> mf.Target:
