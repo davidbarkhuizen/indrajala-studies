@@ -1016,9 +1016,9 @@ def prepare(host: Host, commit: str, repo: Path, scratch: Path) -> list[list[str
                 "ssh",
                 host.name,
                 (
-                    f"cd {ml} && git fetch -q --no-recurse-submodules ~/labour/bundles/batch-ml.bundle batch-pin:batch-pin"
+                    f"cd {ml} && git fetch -q --no-recurse-submodules ~/labour/bundles/batch-ml.bundle +batch-pin:batch-pin"
                     f" && (test -d {studies} || git init -q {studies}) && cd {studies}"
-                    " && git fetch -q --no-recurse-submodules ~/labour/bundles/batch.bundle batch-pin:batch-pin"
+                    " && git fetch -q --no-recurse-submodules ~/labour/bundles/batch.bundle +batch-pin:batch-pin"
                     f" && {_worktree(checkout, commit, ml)}"
                 ),
             ],

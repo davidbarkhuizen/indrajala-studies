@@ -373,6 +373,8 @@ def test_the_fleets_commands_follow_each_hosts_rules():
     assert steps[4] == ["ssh", "stone", "mkdir -p ~/labour/bundles"]
     assert "rev-parse abc123:ml" in steps[2][2] and "--no-recurse-submodules" in steps[7][2]
     assert "cd ~/labour/code/indrajala-studies" in steps[7][2] and "submodule update" in steps[7][2]
+    # a pin moved by a squash merge isn't a fast-forward of the last: the bundles' refs are forced
+    assert steps[7][2].count("+batch-pin:batch-pin") == 2
     (klip_step,) = b.prepare(b.HOSTS["klip"], "abc123", Path("/repo"), Path("/tmp"))
     assert klip_step[2].startswith("cd ~/code/indrajala-ml && git fetch -q origin")
     assert (
