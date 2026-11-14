@@ -87,6 +87,24 @@ def test_attempts_read_a_seed_spec_with_each_backdrops_cutoff():
         b.Batch("x", "find", made)
 
 
+def test_a_part_may_name_its_own_cell_and_runs_under_it_alone_first():
+    made = b.attempts("told-planted-54:840-841@paper,told-d5-sum:800@approximation", ["paper"])
+    assert [(a.id, a.cell, a.backdrop) for a in made] == [
+        ("paper.told-planted-54-840", "paper", "told-planted-54"),
+        ("paper.told-planted-54-841", "paper", "told-planted-54"),
+        ("approximation.told-d5-sum-800", "approximation", "told-d5-sum"),
+    ]
+    alone = b.attempts("s3:1@paper", ["paper"])  # one cell in all: plain ids, as before
+    assert [a.id for a in alone] == ["s3-1"]
+    mixed = b.attempts("s3:1,mtf4:2@approximation", ["continuous"])
+    assert [(a.id, a.cell) for a in mixed] == [
+        ("approximation.mtf4-2", "approximation"),
+        ("continuous.s3-1", "continuous"),
+    ]
+    with pytest.raises(AssertionError, match="registered cells"):
+        b.Batch("x", "measure", b.attempts("s3:1@nope", ["paper"]))
+
+
 def test_a_batch_of_several_cells_names_each_attempt_by_its_cell_and_runs_them_in_turn(tmp_path: Path):
     made = b.attempts("s3:1-2", ["continuous", "approximation"])
     assert [(a.id, a.cell) for a in made] == [

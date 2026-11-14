@@ -414,17 +414,24 @@ class Batch:
 def attempts(spec: str, cells: Sequence[str], cutoffs: dict[str, int] | None = None) -> tuple[Attempt, ...]:
     """
     Attempts from `s3:40-47,mtf4:32-35` under each cell in turn (list the longest first: the fleet takes
-    them in order), each backdrop cut at its `cutoffs` entry if given. With several cells an attempt's id
-    starts with its cell's (`approximation-linear.s3-40`), so the cells' runs never share a directory.
+    them in order), each backdrop cut at its `cutoffs` entry if given. A part may name its own cell,
+    `s3:40-47@paper`: it runs under that cell alone, in its place in the spec, before the parts run under
+    each cell (the told plan's stage 1: division in one cell, planted machines in another, one batch).
+    With several cells an attempt's id starts with its cell's (`approximation-linear.s3-40`), so the
+    cells' runs never share a directory.
     """
+    parts = [(part.partition("@")[0], part.partition("@")[2] or None) for part in spec.split(",")]
+    order = [(own, part) for part, own in parts if own] + [
+        (cell, part) for cell in cells for part, own in parts if not own
+    ]
+    several = len({cell for cell, _ in order}) > 1
     made: list[Attempt] = []
-    for cell in cells:
-        for part in spec.split(","):
-            backdrop, seeds = part.split(":")
-            first, _, last = seeds.partition("-")
-            for seed in range(int(first), int(last or first) + 1):
-                name = f"{backdrop}-{seed}" if len(cells) == 1 else f"{cell}.{backdrop}-{seed}"
-                made.append(Attempt(name, cell, backdrop, seed, (cutoffs or {}).get(backdrop)))
+    for cell, part in order:
+        backdrop, seeds = part.split(":")
+        first, _, last = seeds.partition("-")
+        for seed in range(int(first), int(last or first) + 1):
+            name = f"{cell}.{backdrop}-{seed}" if several else f"{backdrop}-{seed}"
+            made.append(Attempt(name, cell, backdrop, seed, (cutoffs or {}).get(backdrop)))
     return tuple(made)
 
 
