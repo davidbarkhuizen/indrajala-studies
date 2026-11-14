@@ -85,6 +85,9 @@ OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
     # the state itself, A p + B: the finest approximation (the identity congruence), T12's arm (the
     # paper workplan's D31); its p^2 answers widen the output layer (Encoding.classes)
     "state": lambda A, B, p: A * p + B,
+    # the sum's matched partition (the told plan's D4 control, wt.division_matched): the sum's block sizes
+    # and classes told, no congruence; a function of the state, so the machine to learn is unchanged
+    "matched": lambda A, B, p: int(wt.division_matched(p)[A * p + B]),
 }
 # the paper's T1 controls (paper-workplan.md): outputs of the columns read, not of the state (A, B), so
 # no approximation of division's machine: a column's digit sum (its token a + b) and, with the column
@@ -102,6 +105,8 @@ TOKEN = ("token",)  # T1's controls: an extra output that is no approximation, s
 SUFFIX = ("suffix",)  # and state-carrying
 PLANTED = ("planted",)  # a planted machine's approximation asked (T10's P2: wt.query_partitions)
 COVER = ("cover-a", "cover-b")  # T11's machines' coarsest cover asked (the paper workplan's D20: wt.query_partitions)
+MATCHED = ("matched",)  # the told plan's D4 control: division's sum's, or a planted machine's blocks' matched partition
+TOLD = ("sum", "matched")  # the told plan's stage 1 vocabulary at p 5: its three arms ask the same tokens
 QUOTIENT: tuple[str, ...] = ()
 VOCABULARY = ("sum", "difference")  # the operations with a token: every study's before the approximation claim
 WIDE = ("sum", "difference", "product")  # the approximation claim's, the same for its every arm
@@ -256,18 +261,30 @@ class Encoding:
 class MachineEncoding:
     """
     Any machine's own task as the probe's target (D6): a window is one token, then a query token per
-    query (a named approximation, wt.query_partitions: its answer the block of the state after the
+    query (a named partition, wt.query_partitions: its answer the block of the state after the
     token, as division's queries ask its approximations); the token's answer the machine's output,
     its kind its token (D7), the certified answer's; each query's kind its name. The diagnosis
     shares each factor with each coordinate of the state (window_diagnostics.coordinates).
+
+    The vocabulary is the named partitions with a token, so arms compared with each other can share
+    the embedding's rows as division's do (the told plan's stage 1); empty, it is the queries (every
+    study's before).
     """
 
     task: wt.Task
     queries: tuple[str, ...] = ()
+    vocabulary: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         known = wt.query_partitions(self.task.name)
-        assert set(self.queries) <= set(known), f"{self.task.name}'s queries are of {sorted(known)}; got {self.queries}"
+        assert set(self.queries) <= set(self.named) <= set(known), (
+            f"{self.task.name}'s queries {self.queries} need tokens in the vocabulary {self.named}, of {sorted(known)}"
+        )
+
+    @property
+    def named(self) -> tuple[str, ...]:
+        """The partitions with a token: the vocabulary, or the queries without one."""
+        return self.vocabulary or self.queries
 
     @property
     def width(self) -> int:
@@ -275,15 +292,17 @@ class MachineEncoding:
 
     @property
     def query_tokens(self) -> tuple[int, ...]:
-        return tuple(range(self.task.machine.tokens, self.task.machine.tokens + len(self.queries)))
+        return tuple(self.task.machine.tokens + self.named.index(q) for q in self.queries)
 
     @property
     def tokens(self) -> int:
-        return self.task.machine.tokens + len(self.queries)
+        return self.task.machine.tokens + len(self.named)
 
     @property
     def classes(self) -> int:
-        return max((self.task.machine.classes, *(int(labels.max()) + 1 for labels in self._partitions)))
+        """The output layer's: the largest label of the machine's or a vocabulary partition's, plus one (shared as the tokens are)."""
+        known = wt.query_partitions(self.task.name)
+        return max((self.task.machine.classes, *(int(known[q].max()) + 1 for q in self.named)))
 
     @property
     def target_states(self) -> int:
@@ -333,6 +352,9 @@ class Target(Protocol):
     """What the probe needs of a target (D6): Encoding's and MachineEncoding's members, documented there."""
 
     @property
+    def queries(self) -> tuple[str, ...]: ...
+
+    @property
     def width(self) -> int: ...
 
     @property
@@ -364,11 +386,37 @@ class Target(Protocol):
     def states(self, columns: Sequence[int]) -> Sequence[Hashable]: ...
 
 
-def target_named(name: str, queries: tuple[str, ...] = (), vocabulary: tuple[str, ...] = VOCABULARY) -> Target:
-    """modular-division-p's Encoding (with queries and vocabulary), or any other task's MachineEncoding (with queries)."""
+def target_named(name: str, queries: tuple[str, ...] = (), vocabulary: tuple[str, ...] | None = None) -> Target:
+    """
+    modular-division-p's Encoding (with queries and vocabulary, by default VOCABULARY), or any other
+    task's MachineEncoding (with queries and vocabulary, by default the queries).
+    """
     if found := re.fullmatch(r"modular-division-(\d+)", name):
-        return Encoding(int(found[1]), queries, vocabulary)
-    return MachineEncoding(wt.task_named(name), queries)
+        return Encoding(int(found[1]), queries, VOCABULARY if vocabulary is None else vocabulary)
+    return MachineEncoding(wt.task_named(name), queries, vocabulary or ())
+
+
+def query_labels(encoding: Target) -> list[npt.NDArray[np.int64]] | None:
+    """
+    Each query's labels of the target's states (its machine's order), or None when a query isn't a
+    function of the state (division's column operations, T1's token and suffix: the joint machine is larger).
+    """
+    if isinstance(encoding, Encoding):
+        p = encoding.p
+        if any(q in COLUMN_OPERATIONS for q in encoding.queries):
+            return None
+        return [
+            np.array([OPERATIONS[q](A, B, p) for A in range(p) for B in range(p)], dtype=np.int64)
+            for q in encoding.queries
+        ]
+    known = wt.query_partitions(encoding.task.name)
+    return [known[q] for q in encoding.queries]
+
+
+def classes_told(encoding: Target) -> int | None:
+    """The classes of the target's states one column's training targets tell apart (wt.classes_told, the told plan's measure); None when a query isn't a function of the state."""
+    labels = query_labels(encoding)
+    return None if labels is None else wt.classes_told(encoding.task.machine, labels)
 
 
 def columns(n: int, rng: random.Random) -> list[int]:

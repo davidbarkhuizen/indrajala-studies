@@ -77,3 +77,29 @@ def test_factor_shares_reads_a_trained_network_and_writes_every_share(
     read = json.loads(saved.read_text())
     assert len(read["factors"]) == 1 and set(read["factors"][0]["named"]) >= {"parity", "places {0}"}
     assert all(0.0 <= v <= 1.0 for v in read["factors"][0]["named"].values())
+
+
+def test_told_counts_each_arms_classes_and_names_its_queries_congruences(capsys: pytest.CaptureFixture[str]):
+    """The told plan's measure, by task and arm: division's sum against its matched partition, a planted machine's."""
+    assert script.main(["told", "modular-division-5", "--arms", "quotient", "sum", "matched", "suffix"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "modular-division-5 quotient: told 6 / 25; no queries",
+        "modular-division-5 sum: told 22 / 25; sum congruence",
+        "modular-division-5 matched: told 22 / 25; matched no congruence",
+        "modular-division-5 suffix: told not a function of the state; -",
+    ]
+    assert script.main(["told", "random-planted-q16-b4-54", "random-q16-15", "--arms", "matched"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "random-planted-q16-b4-54 matched: told 11 / 16; matched no congruence",
+        "random-q16-15 matched: no such partition to ask",
+    ]
+
+
+def test_a_planted_machines_matched_arm_runs_on_the_told_vocabulary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Stage 1's planted arms run through --runs with --arm matched and the shared --vocabulary."""
+    monkeypatch.setenv("AB_RUNS_ROOT", str(tmp_path / "locks"))
+    out = tmp_path / "out"
+    made = ["run", "--runs", "random-planted-q16-b4-54:1", "--arm", "matched", "--vocabulary", "planted", "matched"]
+    assert script.main([*made, *TINY, "--out", str(out)]) == 0
+    saved = json.loads((out / "seed1" / "checkpoint.json").read_text())
+    assert saved["run"]["tokens"] == 7

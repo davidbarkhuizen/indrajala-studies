@@ -68,6 +68,21 @@ def test_the_state_arm_asks_the_state_itself_and_t12s_vocabulary_widens_both_arm
     assert mf.Encoding(p, mf.FAMILY).classes == mf.Encoding(p, mf.FAMILY, mf.WIDE).classes == p + 1  # as before
 
 
+def test_the_matched_arm_asks_the_sums_matched_partition_on_the_told_vocabulary():
+    # the told plan's stage 1 (D4, D5): at p 5 the answers alone, the sum and its matched partition on one
+    # vocabulary, so the three share the tokens and the output layer and differ in their queries alone
+    p, cols = 5, md.column_tokens((17, 40), 6)
+    arms = [mf.Encoding(p, queries, mf.TOLD) for queries in (mf.QUOTIENT, mf.SUM, mf.MATCHED)]
+    assert {(e.tokens, e.classes) for e in arms} == {(mf.COLUMNS + 2, p + 1)}
+    (_, alone), (_, summed), (tokens, matched) = (e.example(cols) for e in arms)
+    assert alone == summed[0::2] == matched[0::2] == md.answers((17, 40), 6, p)
+    labels = wt.division_matched(p)
+    assert matched[1::2] == tuple(int(labels[A * p + B]) for A, B in arms[2].states(cols))
+    assert set(tokens[1::2]) == {float(mf.COLUMNS + 1)}  # matched's token, the vocabulary's second
+    assert [mf.classes_told(e) for e in arms] == [6, 22, 22]
+    assert mf.classes_told(mf.Encoding(p, mf.SUFFIX, ("suffix",))) is None  # no function of the state
+
+
 def test_the_sum_arm_asks_the_sum_alone_with_the_familys_token():
     encoding = mf.Encoding(5, mf.SUM)
     pair, n = (17, 40), 4

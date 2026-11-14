@@ -640,14 +640,23 @@ COVERED = ("word-problem-s3", "word-problem-s4", "move-to-front-4")  # T11's mac
 def query_partitions(name: str) -> dict[str, IntArray]:
     """
     A task's named approximations an encoding can ask as extra outputs, each its states' labels (a
-    congruence): a planted machine's "planted" (planted_blocks; T10's P2, the paper workplan's D19);
+    congruence): a planted machine's "planted" (planted_blocks; T10's P2, the paper workplan's D19), and
+    beside it its "matched" partition (planted_matched: no congruence, the told plan's D4 control);
     T11's machines' "cover-a" and "cover-b" (their coarsest cover, the coarser first; D20).
     """
     if name in COVERED:
         return dict(zip(("cover-a", "cover-b"), _cover(name), strict=True))
     if found := re.fullmatch(r"random-planted-q(\d+)-b(\d+)-\d+", name):
-        return {"planted": planted_blocks(int(found[1]), int(found[2]))}
+        return {"planted": planted_blocks(int(found[1]), int(found[2])), "matched": planted_matched(name)}
     return {}
+
+
+@functools.cache
+def planted_matched(name: str) -> IntArray:
+    """A planted machine's planted blocks' matched partition (matched_partition, keyed by the task and "planted"): the told plan's stage 1."""
+    found = re.fullmatch(r"random-planted-q(\d+)-b(\d+)-\d+", name)
+    assert found is not None, f"a planted machine's name: {name}"
+    return matched_partition(task_named(name).machine, planted_blocks(int(found[1]), int(found[2])), f"{name}-planted")
 
 
 def planted_labels(name: str) -> dict[str, IntArray]:
@@ -658,6 +667,69 @@ def planted_labels(name: str) -> dict[str, IntArray]:
     """
     known = query_partitions(name)
     return {"planted": known["planted"]} if "planted" in known else {}
+
+
+def state_labels(machine: Mealy) -> IntArray:
+    """
+    Each state's own label, for a machine whose output labels the state reached (every target here:
+    `output = labels[transition]`): the label of any transition into it. Asserted, not assumed: a
+    state reached with two labels has none of its own. A state never entered (the start, at most)
+    takes its token-0 output if token 0 holds it (the identity), else -1.
+    """
+    labels = np.full(machine.states, -1, dtype=np.int64)
+    for s in range(machine.states):
+        for t in range(machine.tokens):
+            r, label = int(machine.transition[s, t]), int(machine.output[s, t])
+            assert labels[r] in (-1, label), f"state {r} is reached with labels {labels[r]} and {label}: no own label"
+            labels[r] = label
+    return labels
+
+
+def classes_told(machine: Mealy, partitions: Sequence[IntArray | Sequence[int]] = ()) -> int:
+    """
+    The classes of the machine's states that one column's training targets tell apart (the told
+    plan's measure, the programme review's O1): states joined when their own label (state_labels)
+    and their label in every extra output's partition agree. The answers alone tell the label's
+    classes; the state itself tells every state.
+    """
+    own = state_labels(machine)
+    return len({(int(own[s]), *(int(p[s]) for p in partitions)) for s in range(machine.states)})
+
+
+MATCHED_DRAWS = 100_000  # matched_partition's draws before it gives up
+
+
+def matched_partition(machine: Mealy, approximation: IntArray | Sequence[int], key: str) -> IntArray:
+    """
+    The told plan's D4 control for an approximation (a congruence): a partition of the machine's states
+    with the approximation's block sizes, that is no congruence (Mealy.is_congruence), and that with the
+    answers tells exactly as many classes (classes_told) as the approximation does. Drawn by shuffling
+    the approximation's labels over the states with a generator keyed by `key` (the target and the
+    approximation, by name), the first draw that holds all three kept, its labels numbered by first state
+    (canonical). Deterministic in its arguments; an error if none of MATCHED_DRAWS draws holds.
+    """
+    labels = np.asarray(approximation, dtype=np.int64)
+    assert machine.is_congruence(labels), "the partition to match is an approximation (a congruence)"
+    told = classes_told(machine, [labels])
+    rng = Random(f"matched-partition-{key}")
+    drawn = labels.tolist()
+    for _ in range(MATCHED_DRAWS):
+        rng.shuffle(drawn)
+        candidate = np.array(canonical(drawn), dtype=np.int64)
+        if not machine.is_congruence(candidate) and classes_told(machine, [candidate]) == told:
+            return candidate
+    raise AssertionError(f"no partition matched to {key} in {MATCHED_DRAWS} draws")
+
+
+def division_sum(p: int) -> IntArray:
+    """Division's sum approximation, (A + B) mod p, over its states A p + B (modular_machine's order)."""
+    return np.array([(A + B) % p for A in range(p) for B in range(p)], dtype=np.int64)
+
+
+@functools.cache
+def division_matched(p: int) -> IntArray:
+    """Division's sum's matched partition at p (matched_partition, keyed by the task and the sum): the told plan's stage 1."""
+    return matched_partition(modular_machine(p), division_sum(p), f"modular-division-{p}-sum")
 
 
 Word = tuple[int, ...]

@@ -130,6 +130,27 @@ def test_a_planted_query_asks_the_block_of_the_state_after_each_token_and_only_t
         mf.target_named("random-q16-0", mf.PLANTED)  # primitive: nothing to ask
 
 
+def test_a_machines_arms_on_one_vocabulary_share_tokens_and_layer_and_differ_in_queries_alone():
+    """
+    The told plan's stage 1 (D5): a planted machine's answers alone, its blocks and their matched
+    partition, each on the vocabulary (planted, matched); without one, the vocabulary is the queries.
+    """
+    name, vocabulary = "random-planted-q16-b4-54", ("planted", "matched")
+    alone, planted, matched = (mf.target_named(name, q, vocabulary) for q in ((), mf.PLANTED, mf.MATCHED))
+    assert {(e.tokens, e.classes) for e in (alone, planted, matched)} == {(7, 4)}
+    assert (planted.query_tokens, matched.query_tokens) == ((5,), (6,))
+    word = alone.draw(8, random.Random(2))
+    machine, blocks = alone.task.machine, wt.planted_matched(name)
+    assert alone.example(word) == (tuple(float(t) for t in word), machine.run(word))
+    tokens, labels = matched.example(word)
+    assert set(tokens[1::2]) == {6.0} and labels[0::2] == machine.run(word)
+    assert labels[1::2] == tuple(int(blocks[s]) for s in machine.path(word))
+    assert [mf.classes_told(e) for e in (alone, planted, matched)] == [4, 11, 11]
+    assert mf.target_named(name, mf.PLANTED).tokens == 6  # T10's encoding unchanged
+    with pytest.raises(AssertionError, match="vocabulary"):
+        mf.target_named(name, mf.MATCHED, ("planted",))
+
+
 @pytest.mark.parametrize(
     ("name", "blocks", "monoids"),
     [("word-problem-s3", (2, 3), (2, 6)), ("word-problem-s4", (4, 6), (24, 6)), ("move-to-front-4", (6, 8), (10, 15))],
