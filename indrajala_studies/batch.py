@@ -264,8 +264,10 @@ class Host:
 WEEKDAYS, ALL_DAYS = (0, 1, 2, 3, 4), (0, 1, 2, 3, 4, 5, 6)
 # One crate build on every host (D6): the same .so, unpacked into a site directory named by its crate
 # commit and put before the worktree on PYTHONPATH, so every host's crate hash is the same and a venv's
-# own build (rebuilt in development) never reaches a batch. rust/ at 647f23c, built on pyramidon.
-CRATE = "crate-647f23c"
+# own build (rebuilt in development) never reaches a batch. rust/ at edce2de (the crate ml 0b17d22 pins: its
+# set_threads and Adam's weight_decay, which 647f23c lacks), a wheel built on pyramidon and unpacked
+# (2026-11-14; .so sha256 f72612f4...).
+CRATE = "crate-edce2de"
 # The owner's rules as data (2026-10-22; jebel on the grid around the clock since 2026-10-23): stone weekday nights and all weekend,
 # the laptops always; slots are cores less the worker's, bounded by memory (pyramidon and klip 5 GB):
 # klip all its cores (the owner: "klip always on, all cores", <= 85 C under the thermal guard; about
