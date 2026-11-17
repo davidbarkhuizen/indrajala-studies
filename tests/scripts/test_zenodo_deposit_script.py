@@ -1,6 +1,7 @@
 import importlib.util
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -19,3 +20,30 @@ def test_a_placeholder_left_unfilled_is_refused(tmp_path: Path):
         script.filled(path)
     path.write_text('{"description": "<p>A preprint (doi:10.5281/zenodo.1). <i>[sic]</i></p>"}')
     assert script.filled(path)["description"].startswith("<p>A preprint")
+
+
+def test_a_new_version_is_a_draft_with_its_own_doi_reserved(monkeypatch: pytest.MonkeyPatch):
+    calls: list[tuple[str, str, Any]] = []
+    draft = {"id": 9, "links": {"bucket": "B", "html": "H"}, "metadata": {"title": "T", "doi": "10.5281/zenodo.1"}}
+
+    def fake(method: str, url: str, token: str, body: Any = None, **_: Any) -> Any:
+        calls.append((method, url, body))
+        if url.endswith("/actions/newversion"):
+            return {"links": {"latest_draft": "D"}}
+        if method == "GET":
+            return draft
+        return draft | {"metadata": body["metadata"] | {"prereserve_doi": {"doi": "10.5281/zenodo.2"}}}
+
+    monkeypatch.setattr(script, "request", fake)
+    made = script.new_version(1, "token")
+    assert made == {"id": 9, "doi": "10.5281/zenodo.2", "bucket": "B", "html": "H", "version_of": 1}
+    assert calls[0] == ("POST", f"{script.API}/deposit/depositions/1/actions/newversion", None)
+    assert calls[2][2]["metadata"] == {"title": "T", "prereserve_doi": True}  # the old DOI dropped, published never
+    assert all(method != "POST" or url.endswith("/actions/newversion") for method, url, _ in calls)
+    reserved = draft | {"metadata": {"prereserve_doi": {"doi": "10.5281/zenodo.3"}}}
+
+    def ready(method: str, url: str, token: str, body: Any = None, **_: Any) -> Any:
+        return reserved if method == "GET" else {"links": {"latest_draft": "D"}}
+
+    monkeypatch.setattr(script, "request", ready)
+    assert script.new_version(1, "token")["doi"] == "10.5281/zenodo.3"  # reserved already: no PUT
