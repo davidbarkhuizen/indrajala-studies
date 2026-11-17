@@ -367,6 +367,61 @@ def paper_state(data: Path) -> Numbers:
     return made
 
 
+# the told plan's stage 1 (indrajala-research docs/workplans/what-is-told-workplan.md), paper 1's version 2: its batch,
+# read with its recertifications and long tests (paper_reading.py told)
+TOLD_STAGE1 = Path("told") / "stage1"
+TOLD_VOCABULARY = ("sum", "matched")  # division's arms' one vocabulary (the told plan's stage 1)
+TOLD_DIVISION_ARMS = [  # division at p 5: the arm, its row's label, its queries for the classes told
+    ("sum", "the sum (an approximation)", mf.SUM),
+    ("matched", "its matched partition (no congruence)", mf.MATCHED),
+    ("quotient", "none (the answers alone)", ()),
+]
+TOLD_MACHINE_ARMS = [  # the planted machines: the arm, its label, its queries
+    ("planted", "the blocks (an approximation)", mf.PLANTED),
+    ("matched", "their matched partition (no congruence)", mf.MATCHED),
+    ("alone", "the answers alone", ()),
+]
+
+
+@cache
+def told_outcomes(data: Path) -> mf.ToldOutcomes:
+    return mf.told_outcomes(data / TOLD_STAGE1)
+
+
+def told_classes(queries: tuple[str, ...], machines: list[int]) -> list[int]:
+    """Each planted machine's classes told by an arm's queries (mf.classes_told)."""
+    made = [mf.classes_told(mf.target_named(f"random-planted-q16-b4-{m}", queries)) for m in machines]
+    assert all(c is not None for c in made)
+    return [c for c in made if c is not None]
+
+
+def told_division(data: Path) -> list[str]:
+    """Stage 1 at p 5: each arm's classes told of the 25 states, its seeds succeeded and the Wilson interval."""
+    outcomes = told_outcomes(data)
+    lines: list[str] = []
+    for arm, label, queries in TOLD_DIVISION_ARMS:
+        seeds = outcomes.division[arm]
+        wins = sum(seeds.values())
+        low, high = inference.wilson(wins, len(seeds))
+        classes = mf.classes_told(mf.Encoding(5, queries, TOLD_VOCABULARY))
+        lines.append(f"{label} & {classes} of 25 & {wins} of {len(seeds)} & {low:.2f}--{high:.2f} \\\\")
+    return lines
+
+
+def told_machines(data: Path) -> list[str]:
+    """Stage 1 on the planted machines: each arm's classes told, its machines succeeding and its runs succeeding."""
+    outcomes = told_outcomes(data)
+    lines: list[str] = []
+    for arm, label, queries in TOLD_MACHINE_ARMS:
+        found = sorted(outcomes.machines[arm])
+        told = told_classes(queries, found)
+        classes = str(told[0]) if len(set(told)) == 1 else f"{span(told)}, mean {statistics.mean(told):.1f}"
+        machines = sum(1 for m in found if outcomes.machines[arm][m])
+        runs = f"{sum(outcomes.machines[arm].values())} of {sum(outcomes.runs[arm].values())}"
+        lines.append(f"{label} & {classes} & {machines} of {len(found)} & {runs} \\\\")
+    return lines
+
+
 TABLES: dict[str, Table] = {
     "tab:approximation": approximation,
     "tab:extra-outputs": arms_table(
@@ -414,6 +469,8 @@ TABLES: dict[str, Table] = {
     "tab:refuted": refuted,
     "tab:groups": groups,
     "tab:state": state,
+    "tab:matched": told_division,
+    "tab:told-planted": told_machines,
 }
 
 
@@ -1003,6 +1060,45 @@ def paper_factors(data: Path) -> Numbers:
     return made
 
 
+TOLD_TEST_KEYS = {  # mf.TOLD_TESTS by name: each test's keys' stem
+    "information, division": "information",
+    "information, planted": "information-planted",
+    "congruence, division": "congruence",
+    "congruence, planted": "congruence-planted",
+    "given against not given": "given",
+}
+
+
+def paper_told(data: Path) -> Numbers:
+    """
+    The told plan's stage 1 (paper 1's version 2): at p 5 each arm's seeds succeeded; on the planted
+    machines the machines, each arm's runs succeeding and the classes the blocks tell; each registered
+    test's p, Holm-adjusted p, mean paired difference and its 95% bootstrap interval (mf.told_tests).
+    """
+    outcomes = told_outcomes(data)
+    made: Numbers = {
+        f"told1.d5-{arm}": none_or(sum(outcomes.division[arm].values())) for arm, _, _ in TOLD_DIVISION_ARMS
+    }
+    made |= {f"told1.{arm}-runs": none_or(sum(outcomes.machines[arm].values())) for arm, _, _ in TOLD_MACHINE_ARMS}
+    machines = sorted(outcomes.machines["planted"])
+    told = told_classes(mf.PLANTED, machines)
+    made |= {
+        "told1.machines": count(len(machines)),
+        "told1.classes-mean": f"{statistics.mean(told):.1f}",
+        "told1.classes-range": span(told),
+    }
+    for result in mf.told_tests(outcomes.division, outcomes.machines):
+        key = f"told1.{TOLD_TEST_KEYS[result['test'].name]}"
+        low, high = result["interval"]
+        made |= {
+            f"{key}-p": p_value(result["p"]),
+            f"{key}-holm": p_value(result["holm"]),
+            f"{key}-mean": f"{result['mean']:+.3f}",
+            f"{key}-interval": f"{low:+.3f} to {high:+.3f}",
+        }
+    return made
+
+
 NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     addition_certificates,
     addition_code_counts,
@@ -1015,6 +1111,7 @@ NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     paper_state,
     paper_factors,
     family_holm,
+    paper_told,
 ]
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 

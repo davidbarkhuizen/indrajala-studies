@@ -1993,6 +1993,34 @@ def told_reading(results: Sequence[Mapping[str, Any]], target: str) -> str:
     )
 
 
+@dataclass(frozen=True)
+class ToldOutcomes:
+    """
+    The told plan's stage 1 from a batch's runs (after `links`, `certify` and `long`): at p 5 each
+    arm's seeds succeeded; on the planted machines each arm's machines' successful runs and runs.
+    """
+
+    division: dict[str, dict[int, bool]]
+    machines: dict[str, dict[int, int]]
+    runs: dict[str, dict[int, int]]
+
+
+def told_outcomes(data: Path) -> ToldOutcomes:
+    """A stage 1 batch's outcomes (DATA/runs, DATA/certify, DATA/long-tests): a run succeeds only certified in
+    both verdicts with every long-test case passed (ArmRun.succeeded)."""
+    runs, verdicts, long = data / "runs", recertifications(data / "certify"), long_tested(data / "long-tests")
+    division = {
+        arm: {r.seed: r.succeeded for r in arm_runs(runs, f"told-d5-{arm}", verdicts, long)}
+        for arm in TOLD_ARMS["division"]
+    }
+    found = machine_unit_runs(runs, "told", TOLD_ARMS["machines"], verdicts, long)
+    return ToldOutcomes(
+        division,
+        {arm: {m: sum(r.succeeded for r in found[arm][m]) for m in found[arm]} for arm in found},
+        {arm: {m: len(found[arm][m]) for m in found[arm]} for arm in found},
+    )
+
+
 def told_lines(
     division: Mapping[str, Mapping[int, bool]],
     machines: Mapping[str, Mapping[int, int]],

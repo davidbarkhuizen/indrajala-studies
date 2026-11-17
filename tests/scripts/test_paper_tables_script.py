@@ -276,3 +276,39 @@ def test_numbers_refuses_a_key_from_two_sources(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(script, "NUMBER_SOURCES", [one, two])
     with pytest.raises(ValueError, match="two sources"):
         script.numbers(tmp_path)
+
+
+def test_the_told_tables_and_numbers_read_stage_1s_outcomes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    # the told plan's stage 1 (paper 1's version 2): at p 5 seeds paired across arms; machines the unit
+    division = {
+        "sum": {800: True, 801: True, 802: False, 803: True},
+        "matched": {800: False, 801: True, 802: False, 803: False},
+        "quotient": {800: False, 801: False, 802: False, 803: False},
+    }
+    machines = {"planted": {73: 1, 54: 0}, "matched": {73: 0, 54: 2}, "alone": {73: 2, 54: 1}}
+    runs = {arm: {73: 2, 54: 2} for arm in machines}
+    outcomes = script.mf.ToldOutcomes(division, machines, runs)
+
+    def told_outcomes(data: Path) -> script.mf.ToldOutcomes:
+        return outcomes
+
+    monkeypatch.setattr(script, "told_outcomes", told_outcomes)
+    assert script.told_division(tmp_path) == [
+        "the sum (an approximation) & 22 of 25 & 3 of 4 & 0.30--0.95 \\\\",
+        "its matched partition (no congruence) & 22 of 25 & 1 of 4 & 0.05--0.70 \\\\",
+        "none (the answers alone) & 6 of 25 & 0 of 4 & 0.00--0.49 \\\\",
+    ]
+    assert script.told_machines(tmp_path) == [
+        "the blocks (an approximation) & 10--11, mean 10.5 & 1 of 2 & 1 of 4 \\\\",
+        "their matched partition (no congruence) & 10--11, mean 10.5 & 1 of 2 & 2 of 4 \\\\",
+        "the answers alone & 3--4, mean 3.5 & 2 of 2 & 3 of 4 \\\\",  # machine 73's answers tell 3
+    ]
+    made = script.paper_told(tmp_path)
+    assert (made["told1.d5-sum"], made["told1.d5-quotient"], made["told1.alone-runs"]) == ("3", "none", "3")
+    assert (made["told1.machines"], made["told1.classes-range"], made["told1.classes-mean"]) == ("2", "10--11", "10.5")
+    tests = {r["test"].name: r for r in script.mf.told_tests(division, machines)}
+    congruence = tests["congruence, division"]
+    assert made["told1.congruence-p"] == script.p_value(congruence["p"])
+    assert made["told1.congruence-holm"] == script.p_value(congruence["holm"])
+    assert made["told1.congruence-mean"] == "+0.500"
+    assert made["told1.given-mean"] == "-1.000"  # the blocks against the answers alone: (1 - 2 + 0 - 1) / 2
