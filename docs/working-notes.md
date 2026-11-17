@@ -184,6 +184,17 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
 
 ## Studies: reading them
 
+- **Training at today's code doesn't reproduce paper 1's runs** (checked 2026-11-17 at `034cdef` with
+  the crate `edce2de`): T1's `d5-sum-319` matches its original for 6 log rows, differs from step 2 and
+  certifies at step 10, not 9 (`same-prefix`). Stage 1 of the told plan (`42c5771`) reruns bit for bit
+  (`told-d5-sum-816`). So rerun a run at the code it ran at: paper 1's version 1 at indrajala-ml
+  `paper1-v1.1`, the told plan's from `paper1-v2` on. The change between them isn't found (ml has 237
+  commits since `paper1-v1.1`, among them AdamW in the crate, #1153-#1154); every table and number of
+  version 1 still regenerates the same (`paper_tables.py check`).
+- **The submodules' URLs are SSH:** studies' `ml` (HTTPS from 2026-11-17) and ml's `rust`. A clone
+  without a GitHub key needs `git config --global url."https://github.com/".insteadOf git@github.com:`
+  (the datapack README says so).
+
 - **Test window networks at full catalogue sizes:** reduced samples passed lengths the full sizes
   fail on a near-working network. `check` uses the full default catalogue; to time other sizes,
   call `wr._evaluate(model, n, wr.test_properties(...))`.
