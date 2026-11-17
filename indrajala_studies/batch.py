@@ -360,13 +360,24 @@ def window_left(host: Host, now: datetime.datetime) -> float | None:
 
 @dataclass(frozen=True)
 class Attempt:
-    """One attempt: a cell on a backdrop's seed, cut at `cutoff` epochs trained (None: run to its budget)."""
+    """
+    One attempt: a cell on a backdrop's seed, cut at `cutoff` epochs trained (None: run to its budget); its
+    training words drawn from `data_seed` when set (the told plan's D7: one seed's weights, another's words).
+    """
 
     id: str
     cell: str
     backdrop: str
     seed: int
     cutoff: int | None = None
+    data_seed: int | None = None
+
+    def fields(self) -> dict[str, Any]:
+        """Its fields for a message or the ledger, `data_seed` only when set (so older ledgers and workers read the rest)."""
+        made = asdict(self)
+        if self.data_seed is None:
+            del made["data_seed"]
+        return made
 
 
 def attempt_command(attempt: Attempt, python: str, script: str, out: Path) -> list[str]:
@@ -374,7 +385,19 @@ def attempt_command(attempt: Attempt, python: str, script: str, out: Path) -> li
     backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[attempt.cell]
     cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
     bound = ["--state-bound", str(backdrop.bound)] if chosen.bounded else []
-    return [python, script, "run", *backdrop.args(attempt.seed), *chosen.args, *bound, *cutoff, "--out", str(out)]
+    words = ["--data-seed", str(attempt.data_seed)] if attempt.data_seed is not None else []
+    return [
+        python,
+        script,
+        "run",
+        *backdrop.args(attempt.seed),
+        *words,
+        *chosen.args,
+        *bound,
+        *cutoff,
+        "--out",
+        str(out),
+    ]
 
 
 @dataclass(frozen=True)
@@ -403,7 +426,7 @@ class Batch:
         return tuple(dict.fromkeys(a.cell for a in self.attempts))
 
     def to_json(self) -> dict[str, Any]:
-        return {"type": "batch", "v": VERSION, **asdict(self)}
+        return {"type": "batch", "v": VERSION, **asdict(self), "attempts": [a.fields() for a in self.attempts]}
 
     @staticmethod
     def from_json(row: dict[str, Any]) -> Batch:
@@ -419,7 +442,8 @@ def attempts(spec: str, cells: Sequence[str], cutoffs: dict[str, int] | None = N
     `s3:40-47@paper`: it runs under that cell alone, in its place in the spec, before the parts run under
     each cell (the told plan's stage 1: division in one cell, planted machines in another, one batch).
     With several cells an attempt's id starts with its cell's (`approximation-linear.s3-40`), so the
-    cells' runs never share a directory.
+    cells' runs never share a directory. A seed may name its words' seed, `d13-family:303/300` (seed
+    303's weights, 300's words; the told plan's D7), one seed a part: its id `d13-family-303-words300`.
     """
     parts = [(part.partition("@")[0], part.partition("@")[2] or None) for part in spec.split(",")]
     order = [(own, part) for part, own in parts if own] + [
@@ -429,10 +453,14 @@ def attempts(spec: str, cells: Sequence[str], cutoffs: dict[str, int] | None = N
     made: list[Attempt] = []
     for cell, part in order:
         backdrop, seeds = part.split(":")
+        seeds, _, words = seeds.partition("/")
         first, _, last = seeds.partition("-")
+        assert not (words and last), f"{part}: a words' seed pairs one seed, not a range"
+        data_seed = int(words) if words else None
         for seed in range(int(first), int(last or first) + 1):
-            name = f"{cell}.{backdrop}-{seed}" if several else f"{backdrop}-{seed}"
-            made.append(Attempt(name, cell, backdrop, seed, (cutoffs or {}).get(backdrop)))
+            stem = f"{backdrop}-{seed}" + (f"-words{data_seed}" if data_seed is not None else "")
+            name = f"{cell}.{stem}" if several else stem
+            made.append(Attempt(name, cell, backdrop, seed, (cutoffs or {}).get(backdrop), data_seed))
     return tuple(made)
 
 
@@ -627,7 +655,7 @@ class Controller:
                 break
             self.log({"type": "assigned", "id": attempt.id, "host": host})
             self.pending[host].add(attempt.id)
-            await send(writer, {"type": "attempt", **asdict(attempt)})
+            await send(writer, {"type": "attempt", **attempt.fields()})
             free -= 1
         if self.state.next_attempt() is None:
             await send(writer, {"type": "drain"})
@@ -876,7 +904,7 @@ class Worker:
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        (directory / "pid").write_text(json.dumps({"pid": child.pid, "attempt": asdict(attempt)}))
+        (directory / "pid").write_text(json.dumps({"pid": child.pid, "attempt": attempt.fields()}))
         running = Running(attempt, directory, child.pid)
         self.running[attempt.id] = running
         return running

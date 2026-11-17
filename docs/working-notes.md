@@ -165,6 +165,9 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
   so the cells' runs never share a directory; `find` counts `k` per cell and backdrop. A ledger from
   before (one `cell` for the batch) is read as each attempt's, and the attempt message is unchanged,
   so a controller at a newer commit serves workers pinned at an older one.
+- **One seed's weights with another's words** (the told plan's stage 2): a part `d13-family:303/300`
+  gives the attempt `data_seed` 300 (the run's `--data-seed`), id `d13-family-303-words300`. It is in the
+  attempt's message and ledger row only when set, so older ledgers and workers are unchanged.
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
   ledger as `opened`); the host table is unchanged.
 - **Restarting a running batch's controller** (to `--open` a host; only with the owner's say): it
