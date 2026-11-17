@@ -16,7 +16,13 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
   `pyramidon`. **At most 2 long-test shares on `klip`** (5.3 GB): an indrajala-studies `paper_reading.py long` child on
   a 16 x 16-code network grows to 1.0-1.3 GB at 1,024 columns, and 4 shares swapped it
   (2026-10-28). Stopping a share means its `modular_family_probe.py long-test` child too: killing the
-  parent leaves the child running, orphaned.
+  parent leaves the child running, orphaned. **Long tests on the runners:** `paper_reading.py long`
+  needs the batch's attempts (told stage 1: 17 GB), so to spread a batch's long tests copy only each
+  network file and run the child's own command there (`modular_family_probe.py long-test NETWORK
+  <task_args> --out DIR`, from the host's worktree at the batch's commit with its crate first on
+  PYTHONPATH), then copy `DIR` back to `DATA/long-tests/<network>/` and its log to `<network>.log`. A
+  long test takes 0.5-3 hours; cap each at 2.5 GB of address space (1.5 GB is under a 16 x 16-code
+  network's 1.0-1.3 GB peak plus Python's overhead), at most 2 on `klip` and 2-3 on `pyramidon`.
 - **`/tmp` on `pyramidon` is RAM-backed (tmpfs) with a per-user quota:** scratch copies of study
   data cost memory, and a test writing many run directories filled the quota (2026-10-18). Remove
   each one's files as it goes (the resume test does).
@@ -161,6 +167,15 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
   so a controller at a newer commit serves workers pinned at an older one.
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
   ledger as `opened`); the host table is unchanged.
+- **Restarting a running batch's controller** (to `--open` a host; only with the owner's say): it
+  rebuilds its state from the ledger and the workers keep their attempts and reconnect, so nothing is
+  lost. Stop the old one first (`kill -- -PGID`) and start the new one in a separate step: a start
+  while the old one holds the port fails with "address already in use", but only after it has logged
+  `opened` in the ledger (told stage 1, 2026-11-16: three such stray `opened` events; the ledger only
+  records them). Write the controller's pid file from the python's own pid (`pgrep -f '[b]atch.py
+  controller'`), not `$!`, which can name the shell wrapper. To change a remote host's slots without a
+  fleet restart, stop its worker by pid when it has no attempts and start `worker_line` with the new
+  slots (`dataclasses.replace(HOSTS[name], slots=N)`).
 - **The controller's own host's attempts weren't copied into the batch** (T2/T5, T10's probe): only
   remote hosts were pulled, so `pyramidon`'s attempts stayed in `~/code/batch-attempts/` with no
   `pulled` event, and a reading of `attempts/` missed them (T2/T5's 15, copied by hand). Now every
