@@ -3342,6 +3342,12 @@ class RunConfig:
     baseline: str | None = None
     recombine: bool = False
     branch_heads: int = 1
+    data_seed: int | None = None  # the training words' seed (the told plan's D7); None: the run's seed
+
+    @property
+    def words_seed(self) -> int:
+        """The seed of the training words each epoch draws: `data_seed` when set, else the run's seed."""
+        return self.seed if self.data_seed is None else self.data_seed
 
     def identity(self, first: int) -> dict[str, Any]:
         """
@@ -3362,6 +3368,7 @@ class RunConfig:
             "fork": None if self.fork is None else repr(self.fork),
             "guard": self.guard,
             **({"first": first} if first != 1 else {}),
+            **({"data_seed": self.data_seed} if self.data_seed is not None else {}),
             **({"long_tail": self.long_tail} if self.long_tail is not None else {}),
             **({"consolidate": True} if self.consolidate else {}),
             **({"restore_best": True} if self.restore_best else {}),
@@ -3948,7 +3955,7 @@ class _Run:
     def run_epoch(self, p: StepPlan, epoch: int) -> str | None:
         """One epoch, trained, screened and logged; how the step ends after it ("fork": goes on from its snapshot), or None."""
         c, s = self.c, self.s
-        rng = random.Random(f"family-train-{c.seed}-{p.step}-{epoch}" + (f"-fork{s.forks}" if s.forks else ""))
+        rng = random.Random(f"family-train-{c.words_seed}-{p.step}-{epoch}" + (f"-fork{s.forks}" if s.forks else ""))
         drawn = (
             growth_lengths(s.cstate.length, c.settings.epoch_examples)
             if p.growing
@@ -4249,6 +4256,7 @@ def run(
     baseline: str | None = None,
     recombine: bool = False,
     branch_heads: int = 1,
+    data_seed: int | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -4321,6 +4329,8 @@ def run(
     an attempt at the first step's end with T epochs trained in all ("cut") unless some step by then
     was certified at both verdicts (D41), so restarts at a fixed
     cutoff (Luby et al. 1993) need no runner to stop a run; a run already certified goes on to its stop.
+    `data_seed` (the told plan's D7) seeds the training words each epoch draws in place of `seed`,
+    which then seeds the network's initial weights alone; unset, both are `seed`, as before it.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -4366,6 +4376,7 @@ def run(
         baseline,
         recombine=recombine,
         branch_heads=branch_heads,
+        data_seed=data_seed,
     )
     running = _Run(config, resume)
     if not running.ended:

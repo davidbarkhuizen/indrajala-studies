@@ -123,6 +123,28 @@ def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     )
 
 
+def test_a_data_seed_moves_the_words_alone(tmp_path: Path):
+    # the told plan's D7: unset, or equal to the seed, a run is the run it was; another changes it
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    encoding = mf.Encoding(5, mf.QUOTIENT)
+
+    def trained(name: str, seed: int, data_seed: int | None) -> tuple[bytes, dict[str, Any]]:
+        out = tmp_path / name
+        mf.run(encoding, [(4, 4)], seed, 1e9, out, settings, budget_epochs=2, data_seed=data_seed)
+        return (out / "network.json").read_bytes(), json.loads((out / mf.CHECKPOINT).read_text())["run"]
+
+    plain, plain_run = trained("plain", 0, None)
+    same, same_run = trained("same", 0, 0)
+    other, other_run = trained("other", 0, 1)
+    swapped, _ = trained("swapped", 1, 0)
+    assert same == plain  # the words' seed defaults to the run's: bit for bit
+    assert other != plain and swapped != plain and swapped != other
+    assert "data_seed" not in plain_run and same_run["data_seed"] == 0 and other_run["data_seed"] == 1
+    assert {k: v for k, v in other_run.items() if k != "data_seed"} == plain_run
+
+
 def test_every_epoch_logs_its_screen_score(tmp_path: Path):
     settings = mf.Settings(
         epoch_examples=64, max_epochs=3, patience=10, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
