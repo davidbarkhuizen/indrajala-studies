@@ -997,7 +997,11 @@ def formation_summary(course: Mapping[str, Any] | None) -> str:
 Course = tuple[float | None, float, bool]  # restart_course's: time to success (None: never), its end, censored there
 
 
-def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> Course | None:
+def restart_course(
+    rows: Sequence[Mapping[str, Any]],
+    clock: str = "epochs",
+    success: Callable[[Mapping[str, Any]], bool] | None = None,
+) -> Course | None:
     """
     A run as a restart attempt, on `clock` ("epochs" trained in all, the budget's unit and the time
     axis, the owner 2026-10-23; "steps"; or "seconds", money not time), from its log.jsonl: its time
@@ -1005,7 +1009,9 @@ def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> 
     None if never), its last step's end, and whether it was censored there (ended at a budget,
     "spent", or the wall-clock guard's "deadline": what it would have done next is unknown) rather
     than finished (a stop that fired on a machine not certified is a failed attempt of known cost).
-    None for a log without step ends.
+    `success` replaces D41's test on a step end where the log doesn't carry both verdicts (a paper run's
+    log has the default alone; its strict verdict is the recertification's): run_course. None for a log
+    without step ends.
     """
     steps = [r for r in rows if "end" in r and "state_share" in r]
     if not steps:
@@ -1020,11 +1026,24 @@ def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> 
     def at(r: Mapping[str, Any]) -> float:
         return float(trained[id(r)] if clock == "epochs" else r["step"] if clock == "steps" else r["seconds"])
 
-    hit = next(
-        (r for r in steps if r.get("certified") and r.get("certificates", {}).get("strict", {}).get("certified")),
-        None,
-    )
+    def both(r: Mapping[str, Any]) -> bool:
+        certificates: Mapping[str, Mapping[str, Any]] = r.get("certificates") or {}
+        return bool(r.get("certified") and certificates.get("strict", {}).get("certified"))
+
+    hit = next((r for r in steps if (success or both)(r)), None)
     return (None if hit is None else at(hit)), at(steps[-1]), hit is None and steps[-1]["end"] in CENSORED
+
+
+def run_course(run: ArmRun, log: Path) -> Course:
+    """
+    An ArmRun's course (restart_course, in epochs) from its log: its success the step it was certified
+    at when it succeeded (recertified in both verdicts and long-tested, ArmRun.succeeded), so D3's
+    measures count the same successes as the rate; never otherwise.
+    """
+    rows = [json.loads(line) for line in log.read_text().splitlines()]
+    made = restart_course(rows, success=lambda r: run.succeeded and r.get("step") == run.outcome.step)
+    assert made is not None, f"{log}: no step ends"
+    return made
 
 
 def restart_cost(runs: Sequence[Course]) -> dict[str, Any]:

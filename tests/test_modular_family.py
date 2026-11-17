@@ -2348,6 +2348,23 @@ def test_restart_cost_finds_lubys_cutoff_and_reads_censored_runs_only_to_the_sho
         True,
     )
     assert mf.restart_course([{"step": 1, "melting": []}]) is None
+
+
+def test_a_paper_runs_course_counts_the_rates_success(tmp_path: Path) -> None:
+    # a paper run's log carries the default verdict alone (no "certificates"): D41's test never
+    # finds a success there; run_course takes the success the rate counts (ArmRun.succeeded)
+    rows = [
+        {"step": 1, "end": "epoch", "state_share": 1.0, "epochs": 3, "seconds": 1.0, "certified": False},
+        {"step": 2, "end": "passed", "state_share": 1.0, "epochs": 4, "seconds": 2.0, "certified": True},
+    ]
+    log = tmp_path / "log.jsonl"
+    log.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert mf.restart_course(rows) == (None, 7.0, False)
+    ran = mf.outcome(rows)
+    assert (ran.step, ran.end) == (2, "certified")
+    for certified, long, success in ((True, True, 7.0), (True, False, None), (False, True, None)):
+        run = mf.ArmRun(800, ran, certified, {}, long=long)
+        assert mf.run_course(run, log) == (success, 7.0, False)
     # half the runs certify at 2, the rest are spent at 100: l(2) = (0.5*2 + 0.5*2) / 0.5 = 4, against
     # (2 + 100) / 1 = 102 per certificate running each out
     cost = mf.restart_cost([(2.0, 2.0, False), (None, 100.0, True)])
