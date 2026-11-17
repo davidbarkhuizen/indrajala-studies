@@ -27,7 +27,6 @@ its backdrop (`indrajala_studies.batch.BACKDROPS`, by the attempt's name `<backd
 """
 
 import argparse
-import json
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -123,30 +122,28 @@ def told(data: Path) -> list[str]:
     """
     The told plan's stage 1 from a batch (after `links`, `certify` and `long`): at p 5 each arm's seeds
     succeeded (mf.ArmRun.succeeded), on the planted machines each arm's machines' successes, the
-    tests and readings (mf.told_lines); then D3's measures from the runs' logs (mf.told_cost_lines).
+    tests and readings (mf.told_lines); then D3's measures from the runs' logs, a run's success the rate's (mf.run_course, mf.told_cost_lines).
     """
     runs = data / "runs"
     outcomes = mf.told_outcomes(data)
     division, machines = outcomes.division, outcomes.machines
+    verdicts, long = mf.recertifications(data / "certify"), mf.long_tested(data / "long-tests")
 
-    def course(log: Path) -> mf.Course:
-        made = mf.restart_course([json.loads(line) for line in log.read_text().splitlines()])
-        assert made is not None, f"{log}: no step ends"
-        return made
+    def log(directory: str, seed: int) -> Path:
+        return runs / directory / f"seed{seed}" / "log.jsonl"
 
-    def seed(log: Path) -> int:
-        return int(log.parent.name.removeprefix("seed"))
-
+    found = mf.machine_unit_runs(runs, "told", mf.TOLD_ARMS["machines"], verdicts, long)
     courses = {
         "division": {
-            arm: {seed(log): course(log) for log in (runs / f"told-d5-{arm}").glob("seed*/log.jsonl")}
+            arm: {
+                r.seed: mf.run_course(r, log(f"told-d5-{arm}", r.seed))
+                for r in mf.arm_runs(runs, f"told-d5-{arm}", verdicts, long)
+            }
             for arm in mf.TOLD_ARMS["division"]
         },
         "machines": {
             arm: {
-                (m, seed(log)): course(log)
-                for m in machines[arm]
-                for log in (runs / f"told-{arm}-{m}").glob("seed*/log.jsonl")
+                (m, r.seed): mf.run_course(r, log(f"told-{arm}-{m}", r.seed)) for m in found[arm] for r in found[arm][m]
             }
             for arm in mf.TOLD_ARMS["machines"]
         },
