@@ -1054,6 +1054,12 @@ def main(argv: list[str]) -> int:
     )
     run.add_argument("--seeds", type=int, default=1)
     run.add_argument(
+        "--data-seed",
+        type=int,
+        help="with --seed: the training words' seed, the run's --seed then the initial weights' alone "
+        "(the told plan's D7, the seed's probe); default --seed, as before it",
+    )
+    run.add_argument(
         "--p", type=int, nargs="+", default=[5], help="the modulus; several run in one pool, into --out/p<p>"
     )
     run.add_argument(
@@ -2050,6 +2056,8 @@ def main(argv: list[str]) -> int:
     # the targets by name: the machines', or division's at each p, and each one's directory when several
     if args.runs is not None and args.task:
         parser.error("--runs names its tasks: not with --task")
+    if args.data_seed is not None and args.seed is None:
+        parser.error("--data-seed pairs one run's weights with its words: only with --seed")
     named: list[str] = args.runs or []
     chosen = [(task, int(seed)) for task, _, seed in (run.rpartition(":") for run in named)]
     if args.runs is not None:
@@ -2085,6 +2093,7 @@ def main(argv: list[str]) -> int:
             answer_branch=args.answer_branch,
             recombine=args.recombine,
             branch_heads=args.branch_heads,
+            data_seed=args.data_seed,
             baseline=args.baseline,
             thermostat=thermostat,
             keep_machine=args.keep_machine,
