@@ -125,13 +125,9 @@ def told(data: Path) -> list[str]:
     succeeded (mf.ArmRun.succeeded), on the planted machines each arm's machines' successes, the
     tests and readings (mf.told_lines); then D3's measures from the runs' logs (mf.told_cost_lines).
     """
-    runs, verdicts, long = data / "runs", mf.recertifications(data / "certify"), mf.long_tested(data / "long-tests")
-    division = {
-        arm: {r.seed: r.succeeded for r in mf.arm_runs(runs, f"told-d5-{arm}", verdicts, long)}
-        for arm in mf.TOLD_ARMS["division"]
-    }
-    found = mf.machine_unit_runs(runs, "told", mf.TOLD_ARMS["machines"], verdicts, long)
-    machines = {arm: {m: sum(r.succeeded for r in found[arm][m]) for m in found[arm]} for arm in found}
+    runs = data / "runs"
+    outcomes = mf.told_outcomes(data)
+    division, machines = outcomes.division, outcomes.machines
 
     def course(log: Path) -> mf.Course:
         made = mf.restart_course([json.loads(line) for line in log.read_text().splitlines()])
@@ -149,7 +145,7 @@ def told(data: Path) -> list[str]:
         "machines": {
             arm: {
                 (m, seed(log)): course(log)
-                for m in found[arm]
+                for m in machines[arm]
                 for log in (runs / f"told-{arm}-{m}").glob("seed*/log.jsonl")
             }
             for arm in mf.TOLD_ARMS["machines"]
@@ -273,7 +269,7 @@ def main() -> None:
                 *task_args(BACKDROPS[network.backdrop]),
                 "--out",
                 out,
-                log=out.with_suffix(".log"),
+                log=out.parent / f"{out.name}.log",  # not with_suffix: the names hold dots
             )
             say(f"long-tested {network.name} exit {rc}")
         say(f"share {args.share} finished")
