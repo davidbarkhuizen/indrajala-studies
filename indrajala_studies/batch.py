@@ -954,8 +954,8 @@ class Worker:
                         return False  # the controller went away: reconnect
                     message = json.loads(line)
                     if message["type"] == "attempt":
-                        fields = {k: message[k] for k in ("id", "cell", "backdrop", "seed", "cutoff")}
-                        running = self.launch(Attempt(**fields))
+                        known = {f.name for f in dataclasses.fields(Attempt)}  # every field it carries
+                        running = self.launch(Attempt(**{k: v for k, v in message.items() if k in known}))
                         await send(writer, {"type": "started", "id": running.attempt.id, "pid": running.pid})
                     elif message["type"] == "drain":
                         self.draining = True

@@ -168,6 +168,10 @@ this repository's: `indrajala_studies/` for ml's `indrajala_ml/studies/` researc
 - **One seed's weights with another's words** (the told plan's stage 2): a part `d13-family:303/300`
   gives the attempt `data_seed` 300 (the run's `--data-seed`), id `d13-family-303-words300`. It is in the
   attempt's message and ledger row only when set, so older ledgers and workers are unchanged.
+  **A new `Attempt` field must reach the run through a worker:** the worker rebuilt each attempt from a
+  fixed list of keys, so #35's `data_seed` was dropped and stage 2's first start (2026-11-17, 12 runs, a
+  minute) ran every pair as its weights' seed alone; stopped and set aside. The worker now takes every
+  field the message carries, and a test runs a words' seed through the controller and a worker.
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
   ledger as `opened`); the host table is unchanged.
 - **Restarting a running batch's controller** (to `--open` a host; only with the owner's say): it

@@ -39,6 +39,7 @@ with (out / "log.jsonl").open("w") as log:
             break
 print(f"seed {seed}: step {step}, {end}")
 print("threads", os.environ.get("INDRAJALA_THREADS"))
+print("args", " ".join(args))
 """
 
 
@@ -120,6 +121,16 @@ def test_a_seed_may_name_its_words_seed_which_reaches_the_run_and_the_ledger_onl
     assert b.Batch.from_json(json.loads(json.dumps(batch.to_json()))) == batch
     with pytest.raises(AssertionError, match="not a range"):
         b.attempts("d13-family:303-304/300", ["paper"])
+
+
+def test_a_words_seed_reaches_the_run_through_the_controller_and_a_worker(tmp_path: Path):
+    batch = b.Batch("s2", "measure", b.attempts("s3:2/5,s3:3", ["paper"]))
+    state = run_batch(tmp_path, batch, worker(tmp_path, "w", 2))
+    assert state.done and set(state.ended) == {"s3-2-words5", "s3-3"}
+    paired, plain = (tmp_path / "w" / name for name in ("s3-2-words5", "s3-3"))
+    assert "--data-seed 5" in (paired / "run.out").read_text()
+    assert "--data-seed" not in (plain / "run.out").read_text()
+    assert json.loads((paired / "pid").read_text())["attempt"]["data_seed"] == 5
 
 
 def test_a_batch_of_several_cells_names_each_attempt_by_its_cell_and_runs_them_in_turn(tmp_path: Path):
