@@ -16,6 +16,12 @@ archives in parts there, the wholes in `whole/`), `--connections` at once, the l
 skipping those already there with the same MD5, and checks each against the checksum Zenodo reports. `zenodo_deposit.py status DIR` compares the
 draft's files with DIR's.
 
+`zenodo_deposit.py newversion DIR --record ID` makes a draft of a published record's next version (paper
+1's version 2, the told plan's O2) with its DOI reserved, kept in DIR's `zenodo.json` as `reserve`
+keeps a new record's; the draft starts with the record's files, so `upload` sends only the files that
+are new or changed (a file of the same name replaced), and `status` names the draft's files DIR
+doesn't hold, to remove in the browser if they belong to the old version alone.
+
 `zenodo_deposit.py edit DIR [--dry-run]` changes a published record's metadata, no new version (its DOI
 and files stay): it lists the fields of the metadata file that differ from the record's, then
 unlocks the record for editing and sets them; the owner reviews the edit and presses Publish (or
@@ -91,6 +97,25 @@ def remote_files(draft: dict[str, Any], token: str) -> dict[str, str]:
     return {f["filename"]: f["checksum"].removeprefix("md5:") for f in files}
 
 
+def new_version(record: int, token: str) -> dict[str, Any]:
+    """A draft of a published record's next version, its DOI reserved: id, doi, bucket, html, and the record."""
+    made = request("POST", f"{API}/deposit/depositions/{record}/actions/newversion", token)
+    url = made["links"]["latest_draft"]
+    draft = request("GET", url, token)
+    reserved = draft["metadata"].get("prereserve_doi", {}).get("doi")
+    if not reserved:  # the new version's own DOI: the old one's metadata carries the old DOI, dropped
+        metadata = {k: v for k, v in draft["metadata"].items() if k != "doi"} | {"prereserve_doi": True}
+        draft = request("PUT", url, token, body={"metadata": metadata})
+        reserved = draft["metadata"]["prereserve_doi"]["doi"]
+    return {
+        "id": draft["id"],
+        "doi": reserved,
+        "bucket": draft["links"]["bucket"],
+        "html": draft["links"]["html"],
+        "version_of": record,
+    }
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--token-file", type=Path, default=Path.home() / ".zenodo-token")
@@ -99,6 +124,9 @@ def main(argv: list[str]) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("reserve", "metadata", "upload", "status"):
         commands.add_parser(name).add_argument("dir", type=Path)
+    newversion = commands.add_parser("newversion", help="a published record's next version, a draft; never publishes")
+    newversion.add_argument("dir", type=Path)
+    newversion.add_argument("--record", type=int, required=True, help="the published record's id")
     edit = commands.add_parser("edit", help="a published record's metadata from --metadata; never publishes")
     edit.add_argument("dir", type=Path)
     edit.add_argument("--dry-run", action="store_true", help="only list the fields that would change")
@@ -106,6 +134,16 @@ def main(argv: list[str]) -> int:
     token = args.token_file.read_text().strip()
     out: Path = args.dir
 
+    if args.command == "newversion":
+        if (out / "zenodo.json").exists():
+            raise SystemExit(f"{out / 'zenodo.json'}: a draft exists already ({state(out)['doi']})")
+        draft = new_version(args.record, token)
+        (out / "zenodo.json").write_text(json.dumps(draft, indent=1) + "\n")
+        print(
+            f"draft {draft['id']} of record {args.record}'s next version: DOI {draft['doi']} "
+            f"(reserved, not yet registered); {draft['html']}"
+        )
+        return 0
     if args.command == "reserve":
         if (out / "zenodo.json").exists():
             raise SystemExit(f"{out / 'zenodo.json'}: a draft exists already ({state(out)['doi']})")
@@ -146,6 +184,8 @@ def main(argv: list[str]) -> int:
         for path in local_files(out):
             mark = "uploaded" if there.get(path.name) == md5(path) else "missing or differs"
             print(f"{path.name}: {mark}")
+        for name in sorted(set(there) - {p.name for p in local_files(out)}):
+            print(f"{name}: on the draft only (from the version before?)")
         return 0
 
     def send(path: Path) -> str:
