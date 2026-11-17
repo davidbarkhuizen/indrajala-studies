@@ -105,6 +105,23 @@ def test_a_part_may_name_its_own_cell_and_runs_under_it_alone_first():
         b.Batch("x", "measure", b.attempts("s3:1@nope", ["paper"]))
 
 
+def test_a_seed_may_name_its_words_seed_which_reaches_the_run_and_the_ledger_only_when_set():
+    made = b.attempts("d13-family:303/300,d13-family:300", ["paper"])
+    assert [(a.id, a.seed, a.data_seed) for a in made] == [
+        ("d13-family-303-words300", 303, 300),
+        ("d13-family-300", 300, None),
+    ]
+    paired, plain = (b.attempt_command(a, "py", "probe.py", Path("out")) for a in made)
+    assert paired[paired.index("--data-seed") + 1] == "300" and paired[paired.index("--seed") + 1] == "303"
+    assert "--data-seed" not in plain
+    batch = b.Batch("s2", "measure", made)
+    rows = batch.to_json()["attempts"]
+    assert rows[0]["data_seed"] == 300 and "data_seed" not in rows[1]
+    assert b.Batch.from_json(json.loads(json.dumps(batch.to_json()))) == batch
+    with pytest.raises(AssertionError, match="not a range"):
+        b.attempts("d13-family:303-304/300", ["paper"])
+
+
 def test_a_batch_of_several_cells_names_each_attempt_by_its_cell_and_runs_them_in_turn(tmp_path: Path):
     made = b.attempts("s3:1-2", ["continuous", "approximation"])
     assert [(a.id, a.cell) for a in made] == [
