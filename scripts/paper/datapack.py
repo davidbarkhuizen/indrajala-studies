@@ -48,6 +48,7 @@ PAPER = [
 MANIFESTS: dict[str, list[str]] = {  # each part of the full pack and its manifests, relative to --data
     **{Path(m).stem: [m] for m in PAPER},
     "approximation-claim": ["approximation-claim.sha256", "approximation-claim-long-tests.sha256"],
+    "told-stage1": ["told/stage1.sha256"],  # paper 1's version 2: the told plan's stage 1, the batch beside it
     "addition": [
         "matrix/results.sha256",
         "control/results.sha256",
