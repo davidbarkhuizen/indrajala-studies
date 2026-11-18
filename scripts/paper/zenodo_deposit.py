@@ -13,7 +13,9 @@ sets the draft's metadata from `--metadata FILE`, by default indrajala-research'
 docs/datapack/zenodo-metadata.json in the sibling clone (the datapack's; the preprint's is beside it). `zenodo_deposit.py upload DIR`
 uploads every file at DIR's top level (but `zenodo.json`; `datapack.py split` leaves the large
 archives in parts there, the wholes in `whole/`), `--connections` at once, the largest first,
-skipping those already there with the same MD5, and checks each against the checksum Zenodo reports. `zenodo_deposit.py status DIR` compares the
+skipping those already there with the same MD5, and checks each against the checksum Zenodo reports;
+a dropped connection is retried, `--tries` in all, and a file still failing is reported at its turn,
+the others going on (the exit status 1). `zenodo_deposit.py status DIR` compares the
 draft's files with DIR's.
 
 `zenodo_deposit.py newversion DIR --record ID` makes a draft of a published record's next version (paper
@@ -36,6 +38,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -70,6 +73,33 @@ def request(method: str, url: str, token: str, body: Any = None, data: Any = Non
     with urllib.request.urlopen(req, timeout=3600) as response:
         text = response.read().decode()
     return json.loads(text) if text else None
+
+
+def send(path: Path, bucket: str, token: str, there: dict[str, str], tries: int = 5, pause: float = 60.0) -> str:
+    """
+    One file into the draft's bucket, skipped if there with its MD5, checked against Zenodo's; a dropped
+    connection (a broken pipe, a reset: OSError, urllib's errors among them) is retried from the start,
+    `pause` times the try's number apart, up to `tries` in all. A file still failing is reported, not
+    raised, so one file's network never ends the others' uploads (2026-11-17, -18: a whole run lost twice).
+    """
+    local = md5(path)
+    if there.get(path.name) == local:
+        return f"{path.name}: there already"
+    made: dict[str, Any] = {}
+    for attempt in range(1, tries + 1):
+        try:
+            with path.open("rb") as f:
+                made = request("PUT", f"{bucket}/{path.name}", token, data=f, size=path.stat().st_size)
+            break
+        except OSError as error:
+            if attempt == tries:
+                return f"{path.name}: FAILED after {tries} tries ({error})"
+            print(f"{path.name}: try {attempt} failed ({error}), again in {pause * attempt:.0f} s", flush=True)
+            time.sleep(pause * attempt)
+    reported = str(made["checksum"]).removeprefix("md5:")
+    if reported != local:
+        raise SystemExit(f"{path.name}: Zenodo reports MD5 {reported}, the file's is {local}")
+    return f"{path.name}: uploaded, {path.stat().st_size / 1e9:.2f} GB, MD5 checked"
 
 
 def md5(path: Path) -> str:
@@ -120,6 +150,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--token-file", type=Path, default=Path.home() / ".zenodo-token")
     parser.add_argument("--connections", type=int, default=12, help="files uploaded at once")
+    parser.add_argument("--tries", type=int, default=5, help="tries a file gets on a dropped connection (upload)")
     parser.add_argument("--metadata", type=Path, default=METADATA, help="the record's metadata (metadata, edit)")
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("reserve", "metadata", "upload", "status"):
@@ -188,21 +219,15 @@ def main(argv: list[str]) -> int:
             print(f"{name}: on the draft only (from the version before?)")
         return 0
 
-    def send(path: Path) -> str:
-        local = md5(path)
-        if there.get(path.name) == local:
-            return f"{path.name}: there already"
-        with path.open("rb") as f:
-            made = request("PUT", f"{draft['bucket']}/{path.name}", token, data=f, size=path.stat().st_size)
-        reported = made["checksum"].removeprefix("md5:")
-        if reported != local:
-            raise SystemExit(f"{path.name}: Zenodo reports MD5 {reported}, the file's is {local}")
-        return f"{path.name}: uploaded, {path.stat().st_size / 1e9:.2f} GB, MD5 checked"
+    def one(path: Path) -> str:
+        return send(path, draft["bucket"], token, there, args.tries)
 
+    failed = 0
     with ThreadPoolExecutor(args.connections) as pool:  # Zenodo's connections are slow one by one
-        for line in pool.map(send, sorted(local_files(out), key=lambda p: -p.stat().st_size)):
+        for line in pool.map(one, sorted(local_files(out), key=lambda p: -p.stat().st_size)):
             print(line, flush=True)
-    return 0
+            failed += "FAILED" in line
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
