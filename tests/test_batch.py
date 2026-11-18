@@ -106,6 +106,19 @@ def test_a_part_may_name_its_own_cell_and_runs_under_it_alone_first():
         b.Batch("x", "measure", b.attempts("s3:1@nope", ["paper"]))
 
 
+def test_the_scaling_cell_is_the_papers_with_its_budget_in_proportion_to_p():
+    assert [a for a in b.SCALING_CELL if a != "--budget-epochs"] == [
+        a for a in b.PAPER_CELL if a not in ("--budget-epochs", "600")
+    ]
+    for p, epochs in ((13, 598), (17, 782), (19, 874), (23, 1058)):
+        (made,) = b.attempts(f"d{p}-family:400", ["scaling"])
+        command = b.attempt_command(made, "py", "probe.py", Path("out"))
+        assert command.count("--budget-epochs") == 1 and command[command.index("--budget-epochs") + 1] == str(epochs)
+        assert command[command.index("--p") + 1] == str(p)
+    (paper,) = b.attempts("d13-family:400", ["paper"])
+    assert b.attempt_command(paper, "py", "probe.py", Path("out")).count("--budget-epochs") == 1
+
+
 def test_a_seed_may_name_its_words_seed_which_reaches_the_run_and_the_ledger_only_when_set():
     made = b.attempts("d13-family:303/300,d13-family:300", ["paper"])
     assert [(a.id, a.seed, a.data_seed) for a in made] == [
