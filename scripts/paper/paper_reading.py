@@ -27,6 +27,7 @@ its backdrop (`indrajala_studies.batch.BACKDROPS`, by the attempt's name `<backd
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -59,18 +60,30 @@ class Network:
         return f"{self.attempt}-{self.path.name.removesuffix('.network.json')}"
 
 
+WORDS = re.compile(r"-words(\d+)$")  # a words' seed of its own (the told plan's D7): `d13-family-303-words300`
+
+
+def words(attempt: str) -> str:
+    """The attempt's words' suffix (`-words300`), or empty when its words are its seed's."""
+    found = WORDS.search(attempt)
+    return found.group(0) if found else ""
+
+
 def split(attempt: str) -> tuple[str, int]:
     """
-    An attempt's backdrop and seed: `d11-family-300` -> (`d11-family`, 300); a batch of several cells
-    names its attempts `<cell>.<backdrop>-<seed>` (T3's `approximation.d5-family-wide-300`).
+    An attempt's backdrop and (weights') seed: `d11-family-300` -> (`d11-family`, 300); a batch of
+    several cells names its attempts `<cell>.<backdrop>-<seed>` (T3's
+    `approximation.d5-family-wide-300`); a words' seed of its own is left off
+    (`d13-family-303-words300` -> (`d13-family`, 303)).
     """
-    backdrop, _, seed = group(attempt).rpartition(".")[2], None, attempt.rpartition("-")[2]
+    stem = WORDS.sub("", attempt)
+    backdrop, _, seed = group(stem).rpartition(".")[2], None, stem.rpartition("-")[2]
     return backdrop, int(seed)
 
 
 def group(attempt: str) -> str:
-    """An attempt's cell (if named) and backdrop, its seed left off: the unit a reading is run over."""
-    return attempt.rpartition("-")[0]
+    """An attempt's cell (if named) and backdrop, its seeds left off: the unit a reading is run over."""
+    return WORDS.sub("", attempt).rpartition("-")[0]
 
 
 def coded(attempt: str) -> bool:
@@ -190,7 +203,7 @@ def main() -> None:
     elif args.command == "links":
         for attempt in sorted(p.name for p in (data / "attempts").iterdir()):
             backdrop, seed = split(attempt)
-            link = data / "runs" / backdrop / f"seed{seed}"
+            link = data / "runs" / backdrop / f"seed{seed}{words(attempt)}"
             link.parent.mkdir(parents=True, exist_ok=True)
             link.unlink(missing_ok=True)
             link.symlink_to(Path("../..") / run_directory(data, attempt).relative_to(data))

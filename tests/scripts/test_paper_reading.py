@@ -51,6 +51,12 @@ def test_a_cells_prefix_is_read_and_a_continuous_cell_has_no_machine() -> None:
     assert script.coded("approximation-linear.d5-family-wide-300") and script.coded("s3-300")
 
 
+def test_a_words_seed_of_its_own_is_left_off_the_backdrop_and_kept_in_the_link() -> None:
+    assert script.split("d13-family-303-words300") == ("d13-family", 303)
+    assert script.group("d13-family-303-words300") == "d13-family"
+    assert script.words("d13-family-303-words300") == "-words300" and script.words("d13-family-303") == ""
+
+
 def test_the_probe_is_this_repositorys_and_a_machines_vocabulary_is_read_with_its_networks() -> None:
     """The probe moved here from ml (2026-10-31); the told plan's machine arms are read on their vocabulary."""
     assert script.PROBE.exists()
