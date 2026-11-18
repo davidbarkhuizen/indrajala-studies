@@ -101,6 +101,10 @@ PAPER_CELL = [
     "--workers",
     "1",
 ]
+SCALING_CELL = [
+    *PAPER_CELL[: PAPER_CELL.index("--budget-epochs")],
+    *PAPER_CELL[PAPER_CELL.index("--budget-epochs") + 2 :],
+]
 
 # The approximation claim's cell (`git show c201622:docs/approximation-claim-workplan.md`: two factors
 # of 16, reading the output, the default window, 400 epochs, stop at certified, no fork): T1 repeats its
@@ -114,6 +118,7 @@ class Cell:
 
     args: tuple[str, ...]
     bounded: bool = False
+    budget_per_p: int | None = None  # a division backdrop's budget, in epochs a unit of p (the told plan's D8)
 
 
 CELLS: dict[str, Cell] = {
@@ -123,6 +128,8 @@ CELLS: dict[str, Cell] = {
         (*CONTINUOUS_CELL, "--incremental-reheat"), bounded=True
     ),  # incremental-reheat-workplan.md
     "paper": Cell(tuple(PAPER_CELL)),
+    # the told plan's stage 3 (D8): the paper's cell with its 600 epochs at p 13 in proportion to p, 46 a unit
+    "scaling": Cell(tuple(SCALING_CELL), budget_per_p=46),
     "approximation": Cell(tuple(APPROXIMATION_CELL)),
     # T3's baselines: the approximation claim's cell with only the window (E6's) or the state (E2's) changed
     "approximation-linear": Cell((*APPROXIMATION_CELL, "--baseline", "linear")),
@@ -172,6 +179,11 @@ class Backdrop:
     def division(self) -> bool:
         return self.task.startswith(DIVISION)
 
+    @property
+    def p(self) -> int:
+        assert self.division, f"{self.task}: not division, no p"
+        return int(self.task.removeprefix(DIVISION))
+
     def args(self, seed: int) -> list[str]:
         vocabulary = ["--vocabulary", *self.vocabulary] if self.vocabulary else []
         if not self.division:
@@ -197,6 +209,8 @@ BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name 
     **{f"d5-{arm}": division(5, arm, T1_VOCABULARY) for arm in ("sum", "suffix", "token")},
     # T2: the cover at p 7, 11 and 13, the quotient alone at 11
     **{f"d{p}-family": division(p) for p in (7, 11, 13)},
+    # the told plan's stage 3 (D8): the cover at p 17, 19 and 23
+    **{f"d{p}-family": division(p) for p in (17, 19, 23)},
     "d11-quotient": division(11, "quotient"),
     # T3: the cover at p 5 on the approximation claim's vocabulary (A1's arm), under each window and state
     "d5-family-wide": division(5, "family", WIDE),
@@ -386,6 +400,8 @@ def attempt_command(attempt: Attempt, python: str, script: str, out: Path) -> li
     cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
     bound = ["--state-bound", str(backdrop.bound)] if chosen.bounded else []
     words = ["--data-seed", str(attempt.data_seed)] if attempt.data_seed is not None else []
+    per_p = chosen.budget_per_p
+    budget = ["--budget-epochs", str(per_p * backdrop.p)] if per_p is not None else []
     return [
         python,
         script,
@@ -393,6 +409,7 @@ def attempt_command(attempt: Attempt, python: str, script: str, out: Path) -> li
         *backdrop.args(attempt.seed),
         *words,
         *chosen.args,
+        *budget,
         *bound,
         *cutoff,
         "--out",
