@@ -47,3 +47,29 @@ def test_a_new_version_is_a_draft_with_its_own_doi_reserved(monkeypatch: pytest.
 
     monkeypatch.setattr(script, "request", ready)
     assert script.new_version(1, "token")["doi"] == "10.5281/zenodo.3"  # reserved already: no PUT
+
+
+def test_a_dropped_connection_is_retried_and_a_file_still_failing_is_reported_not_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    path = tmp_path / "part-00"
+    path.write_bytes(b"data")
+    local = script.md5(path)
+    tries: list[int] = []
+
+    def flaky(method: str, url: str, token: str, data: Any = None, **_: Any) -> Any:
+        tries.append(len(data.read()))
+        if len(tries) < 3:
+            raise BrokenPipeError(32, "Broken pipe")
+        return {"checksum": f"md5:{local}"}
+
+    monkeypatch.setattr(script, "request", flaky)
+    assert script.send(path, "B", "token", {}, tries=3, pause=0) == "part-00: uploaded, 0.00 GB, MD5 checked"
+    assert tries == [4, 4, 4]  # each try sends the whole file from its start
+    assert script.send(path, "B", "token", {"part-00": local}, pause=0) == "part-00: there already"
+
+    def down(method: str, url: str, token: str, **_: Any) -> Any:
+        raise ConnectionResetError(104, "Connection reset by peer")
+
+    monkeypatch.setattr(script, "request", down)
+    assert script.send(path, "B", "token", {}, tries=2, pause=0).startswith("part-00: FAILED after 2 tries")
