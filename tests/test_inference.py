@@ -21,6 +21,15 @@ def test_wilson_interval():
     assert low == pytest.approx(1 - high)
 
 
+def test_clopper_pearson_interval():
+    """Exact intervals, against the published values (e.g. 15 of 20: 0.5089-0.9134)."""
+    assert st.clopper_pearson(15, 20) == pytest.approx((0.508954, 0.913428), abs=1e-6)
+    assert st.clopper_pearson(0, 20) == pytest.approx((0.0, 0.168433), abs=1e-6) and st.clopper_pearson(0, 20)[0] == 0.0
+    assert st.clopper_pearson(20, 20)[1] == 1.0 and st.clopper_pearson(0, 0) == (0.0, 1.0)
+    low, high = st.clopper_pearson(10, 20)
+    assert low == pytest.approx(1 - high) and low < st.wilson(10, 20)[0]  # exact is the wider
+
+
 def test_fisher_exact_two_sided():
     assert st.fisher_exact(3, 1, 1, 3) == pytest.approx(0.485714, abs=1e-6)  # the lady tasting tea
     assert st.fisher_exact(10, 0, 8, 2) == pytest.approx(0.473684, abs=1e-6)  # the control at k 4

@@ -15,7 +15,7 @@ two-sided.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from statistics import NormalDist
@@ -40,6 +40,35 @@ def wilson(successes: int, trials: int, z: float = Z95) -> tuple[float, float]:
     low = 0.0 if successes == 0 else (centre - spread) / scale  # exact at the ends, not 1e-17 off
     high = 1.0 if successes == trials else (centre + spread) / scale
     return low, high
+
+
+def clopper_pearson(successes: int, trials: int, level: float = 0.95) -> tuple[float, float]:
+    """
+    A rate's exact (Clopper-Pearson) interval, 95% by default (the told plan's stage 3, D3's rate): the
+    rates whose binomial tails at the count are each above half the remainder, by bisection on the
+    exact tails; no trials, the whole of [0, 1].
+    """
+    assert 0 <= successes <= trials
+    if trials == 0:
+        return 0.0, 1.0
+    alpha = (1 - level) / 2
+
+    def tail(rate: float, xs: range) -> float:
+        return sum(math.comb(trials, x) * rate**x * (1 - rate) ** (trials - x) for x in xs)
+
+    def solve(
+        rising: Callable[[float], float], target: float
+    ) -> float:  # where a rising function of the rate meets target
+        low, high = 0.0, 1.0
+        for _ in range(60):
+            middle = (low + high) / 2
+            low, high = (middle, high) if rising(middle) < target else (low, middle)
+        return (low + high) / 2
+
+    above, below = range(successes, trials + 1), range(successes + 1)
+    lower = 0.0 if successes == 0 else solve(lambda r: tail(r, above), alpha)  # P(X >= k) = alpha
+    upper = 1.0 if successes == trials else solve(lambda r: 1 - tail(r, below), 1 - alpha)  # P(X <= k) = alpha
+    return lower, upper
 
 
 def fisher_exact(a: int, b: int, c: int, d: int) -> float:

@@ -24,6 +24,9 @@ its backdrop (`indrajala_studies.batch.BACKDROPS`, by the attempt's name `<backd
   read from DATA/runs (after `links`) with the recertifications and long tests: the five registered
   tests, Holm over the five, each target's reading (mf.told_lines), and D3's measures beside them
   (mf.told_cost_lines).
+- `scaling DATA`: the told plan's stage 3, read from DATA/runs (after `links`) with the recertifications
+  and long tests: at each p of the ladder (d<p>-family) P1, P2 and P3 and D3's measures beside them, then
+  the registered reading (mf.scaling_lines).
 """
 
 import argparse
@@ -164,10 +167,24 @@ def told(data: Path) -> list[str]:
     return [*mf.told_lines(division, machines), *mf.told_cost_lines(courses)]
 
 
+def scaling(data: Path) -> list[str]:
+    """The told plan's stage 3 from a batch (after `links`, `certify` and `long`): each p's runs, read as stage 1's (mf.run_course), into mf.scaling_lines."""
+    runs = data / "runs"
+    verdicts, long = mf.recertifications(data / "certify"), mf.long_tested(data / "long-tests")
+    found = {
+        p: [
+            (r, mf.run_course(r, runs / f"d{p}-family" / f"seed{r.seed}" / "log.jsonl"))
+            for r in mf.arm_runs(runs, f"d{p}-family", verdicts, long)
+        ]
+        for p in mf.SCALING_PS
+    }
+    return mf.scaling_lines({p: found[p] for p in found if found[p]})
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("plan", "links", "certify", "approximations", "proof", "long", "machines", "told"):
+    for name in ("plan", "links", "certify", "approximations", "proof", "long", "machines", "told", "scaling"):
         command = sub.add_parser(name)
         command.add_argument("data", type=Path)
         if name == "certify":
@@ -180,8 +197,8 @@ def main() -> None:
             command.add_argument("--pairs", nargs="+", required=True, metavar="A:B", help="A tends larger than B")
     args = parser.parse_args()
     data: Path = args.data
-    if args.command == "told":
-        for line in told(data):
+    if args.command in ("told", "scaling"):
+        for line in (told if args.command == "told" else scaling)(data):
             print(line)
         return
     if args.command == "machines":
