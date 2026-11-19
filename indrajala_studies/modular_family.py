@@ -2090,6 +2090,145 @@ def told_cost_lines(courses: Mapping[str, Mapping[str, Mapping[Any, Course]]], r
     return lines
 
 
+SCALING_PS = (
+    17,
+    19,
+    23,
+)  # the told plan's stage 3 ladder (registered 2026-11-18, research #268), backdrops d<p>-family
+SCALING_BUDGET_PER_P = 46  # epochs a unit of p (the `scaling` cell, batch.CELLS)
+SCALING_EPOCHS_BAND = (20, 30)  # P1: the median epochs to a certificate lies between 20 p and 30 p
+SCALING_STEP_BAND = (7, 14)  # P2: the median certified step lies between 7 and 14
+SCALING_DEPTH_K = 4  # the division family's depth plus Chow's k at p >= 11 (3 + 1)
+SCALING_RULE_STEP = math.ceil(1.75 * SCALING_DEPTH_K)  # P3: no certificate before the coverage rule's length (7)
+
+
+def censored_median(values: Sequence[float]) -> float:
+    """A sample's median with failures as math.inf (beyond the budget): beyond it when either middle value is."""
+    ordered = sorted(values)
+    n = len(ordered)
+    assert n, "a median of no runs"
+    if n % 2:
+        return ordered[n // 2]
+    a, b = ordered[n // 2 - 1], ordered[n // 2]
+    return math.inf if math.isinf(b) else (a + b) / 2
+
+
+def censored_median_interval(
+    values: Sequence[float], resamples: int = 2000, seed: str = "scaling-median"
+) -> tuple[float, float]:
+    """censored_median's percentile 95% bootstrap interval, the runs resampled, from a generator keyed by `seed`."""
+    rng = random.Random(seed)
+    medians = sorted(censored_median(rng.choices(list(values), k=len(values))) for _ in range(resamples))
+    return medians[int(0.025 * resamples)], medians[min(resamples - 1, int(0.975 * resamples))]
+
+
+@dataclass(frozen=True)
+class ScalingReading:
+    """One p of stage 3: its runs' epochs to a success (math.inf when none), certified steps, and the predictions' verdicts."""
+
+    p: int
+    runs: int
+    certified: int  # recertified in both verdicts
+    succeeded: int  # and long-tested (ArmRun.succeeded)
+    epochs: tuple[float, ...]
+    steps: tuple[int, ...]  # each success's certified step
+    median_epochs: float
+    interval: tuple[float, float]
+    median_step: float | None
+    p1: bool
+    p2: bool | None  # None: no success, no step to read
+    early: int  # successes before SCALING_RULE_STEP (P3 refuted by any)
+
+
+def scaling_reading(p: int, runs: Sequence[tuple[ArmRun, Course]], resamples: int = 2000) -> ScalingReading:
+    """
+    The told plan's stage 3 reading at one p (research #268): a run succeeds as stage 1's do (recertified in
+    both verdicts and long-tested, ArmRun.succeeded; its epochs run_course's); P1 the median epochs with
+    failures beyond the budget, P2 the median certified step of the successes, P3 the successes before the
+    coverage rule's length.
+    """
+    won = [(r, c) for r, c in runs if r.succeeded and c[0] is not None]
+    epochs = tuple(math.inf if c[0] is None or not r.succeeded else float(c[0]) for r, c in runs)
+    steps = tuple(r.outcome.step for r, _ in won)
+    median = censored_median(epochs)
+    low, high = SCALING_EPOCHS_BAND
+    step = censored_median([float(s) for s in steps]) if steps else None
+    return ScalingReading(
+        p=p,
+        runs=len(runs),
+        certified=sum(r.certified for r, _ in runs),
+        succeeded=len(won),
+        epochs=epochs,
+        steps=steps,
+        median_epochs=median,
+        interval=censored_median_interval(epochs, resamples, f"scaling-{p}"),
+        median_step=step,
+        p1=low * p <= median <= high * p,
+        p2=None if step is None else SCALING_STEP_BAND[0] <= step <= SCALING_STEP_BAND[1],
+        early=sum(s < SCALING_RULE_STEP for s in steps),
+    )
+
+
+def scaling_verdict(readings: Sequence[ScalingReading]) -> str:
+    """
+    Stage 3's reading, fixed at registration: the law holds if P1 and P2 hold at every p; the epochs scale
+    but not the step (or the reverse) if one holds at every p; it breaks at the first p where both fail.
+    A P2 with no success to read counts as not holding.
+    """
+    p1 = all(r.p1 for r in readings)
+    p2 = all(r.p2 is True for r in readings)
+    if p1 and p2:
+        return "the law holds"
+    if p1:
+        return "the epochs scale but not the step"
+    if p2:
+        return "the step scales but not the epochs"
+    broken = next((r.p for r in readings if not r.p1 and r.p2 is not True), None)
+    return f"it breaks at p {broken}" if broken is not None else "none of the registered readings"
+
+
+def scaling_lines(runs: Mapping[int, Sequence[tuple[ArmRun, Course]]], resamples: int = 2000) -> list[str]:
+    """Stage 3's readout: each p's P1-P3 and D3's measures beside them (the cost per certificate cross-fitted, the rate's exact interval)."""
+
+    def shown(x: float) -> str:
+        return "beyond the budget" if math.isinf(x) else f"{x:g}"
+
+    lines: list[str] = []
+    readings = [scaling_reading(p, runs[p], resamples) for p in sorted(runs)]
+    for r in readings:
+        low, high = SCALING_EPOCHS_BAND
+        budget = SCALING_BUDGET_PER_P * r.p
+        rate_low, rate_high = inference.clopper_pearson(r.succeeded, r.runs)
+        steps = ", ".join(map(str, sorted(r.steps))) or "none"
+        p2 = (
+            "- (no success): not read"
+            if r.median_step is None
+            else f"{r.median_step:g} (steps {steps}); band {SCALING_STEP_BAND[0]}-{SCALING_STEP_BAND[1]}: "
+            f"{'holds' if r.p2 else 'refuted'}"
+        )
+        lines += [
+            (
+                f"p {r.p}: {r.runs} runs, {r.certified} certified in both verdicts, {r.succeeded} succeeded "
+                f"(long-tested); rate {r.succeeded / r.runs:.2f} (exact 95% {rate_low:.2f}-{rate_high:.2f}); "
+                f"budget {budget} epochs"
+            ),
+            (
+                f"p {r.p} P1: median epochs to a certificate {shown(r.median_epochs)} (95% {shown(r.interval[0])} "
+                f"to {shown(r.interval[1])}); band {low * r.p}-{high * r.p}: {'holds' if r.p1 else 'refuted'}"
+            ),
+            f"p {r.p} P2: median certified step {p2}",
+            f"p {r.p} P3: {r.early} certificates before step {SCALING_RULE_STEP}",
+            f"p {r.p} cost: "
+            + cross_fitted_summary(cross_fitted_cost([c for _, c in runs[r.p]], resamples, f"scaling-{r.p}")),
+        ]
+    early = sum(r.early for r in readings)
+    lines += [
+        f"P3, the coverage rule: {'refuted' if early else 'holds'} ({early} certificates before step {SCALING_RULE_STEP})",
+        f"reading: {scaling_verdict(readings)}",
+    ]
+    return lines
+
+
 def seed_clustering(
     seeds: Sequence[int], failed: Sequence[Collection[int]], shuffles: int = 200_000, key: str = "seed-clustering"
 ) -> tuple[int, float]:

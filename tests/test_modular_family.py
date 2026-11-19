@@ -2861,3 +2861,32 @@ def test_seed_clustering_reproduces_the_programme_reviews_o4():
     assert mf.seed_clustering(range(300, 320), failed, 20_000) == (observed, p)  # keyed
     with pytest.raises(AssertionError):
         mf.seed_clustering(range(300, 310), failed, 10)
+
+
+def _scaling_run(seed: int, step: int | None, epochs: float | None, end: float = 1000.0) -> tuple[mf.ArmRun, mf.Course]:
+    """A stage 3 run: certified at `step` after `epochs` (both verdicts, long-tested), or spent at `end`."""
+    won = step is not None
+    outcome = mf.Outcome(step or 40, "certified" if won else "spent", int(epochs or end), 1.0, 1.0, 1, 0, 0, 0)
+    run = mf.ArmRun(seed, outcome, won, {r: won for r in mf.VERDICTS}, long=True if won else None)
+    finished = epochs if won and epochs is not None else end
+    return run, (epochs if won else None, finished, not won)
+
+
+def test_the_scaling_reading_censors_failures_beyond_the_budget_and_reads_p1_to_p3() -> None:
+    """The told plan's stage 3 (research #268): P1's median counts a spent run beyond the budget, P2 reads successes' steps."""
+    assert mf.censored_median([1.0, 3.0, math.inf]) == 3.0 and mf.censored_median([1.0, 3.0]) == 2.0
+    assert mf.censored_median([1.0, 3.0, math.inf, math.inf]) == math.inf and mf.SCALING_RULE_STEP == 7
+    good = [_scaling_run(s, 10, 400.0 + s) for s in range(3)] + [_scaling_run(3, None, None)]
+    reading = mf.scaling_reading(17, good, resamples=200)
+    assert (reading.succeeded, reading.median_epochs, reading.median_step) == (3, 401.5, 10)
+    assert reading.p1 and reading.p2 and reading.early == 0  # 340-510 at p 17; steps 7-14
+    slow = [_scaling_run(s, 6, 300.0) for s in range(2)] + [_scaling_run(s, None, None) for s in (2, 3, 4)]
+    late = mf.scaling_reading(23, slow, resamples=200)
+    assert late.median_epochs == math.inf and not late.p1 and late.p2 is False and late.early == 2
+    assert late.interval[1] == math.inf
+    assert mf.scaling_verdict([reading, reading]) == "the law holds"
+    assert mf.scaling_verdict([reading, late]) == "it breaks at p 23"
+    lines = mf.scaling_lines({17: good, 23: slow}, resamples=200)
+    assert "p 23 P1: median epochs to a certificate beyond the budget" in lines[6]
+    assert lines[-2] == "P3, the coverage rule: refuted (2 certificates before step 7)"
+    assert lines[-1] == "reading: it breaks at p 23"

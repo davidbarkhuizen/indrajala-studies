@@ -96,3 +96,21 @@ def test_told_reads_a_batchs_runs_into_the_five_tests_and_the_cost_measures(tmp_
     assert "reading, division at p 5: undecided" in lines and "reading, planted machines: undecided" in lines
     assert sum("2 runs (1 + 1), 0 certified as run" in line for line in lines) == 6  # each arm's cost
     assert sum("0 ties" not in line and "ties" in line for line in lines) == 5  # each test's epochs, all tied
+
+
+def test_scaling_reads_each_rungs_runs(tmp_path: Path) -> None:
+    """Stage 3's reading wired to a batch's links: every run here spent its budget, so P1 is refuted at each p."""
+    import json
+
+    for p in (17, 23):
+        for seed in (500, 501):
+            directory = tmp_path / "runs" / f"d{p}-family" / f"seed{seed}"
+            directory.mkdir(parents=True)
+            row = {"step": 30, "end": "spent", "state_share": 0.5, "epochs": 46 * p + 1, "seconds": 1.0}
+            (directory / "log.jsonl").write_text(json.dumps(row) + "\n")
+    (tmp_path / "certify").mkdir()
+    (tmp_path / "long-tests").mkdir()
+    lines = script.scaling(tmp_path)
+    assert lines[0].startswith("p 17: 2 runs, 0 certified in both verdicts, 0 succeeded")
+    assert "budget 1058 epochs" in lines[5] and not any(line.startswith("p 19") for line in lines)
+    assert lines[-1] == "reading: it breaks at p 17"
