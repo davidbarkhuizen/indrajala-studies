@@ -119,6 +119,17 @@ def test_the_scaling_cell_is_the_papers_with_its_budget_in_proportion_to_p():
     assert b.attempt_command(paper, "py", "probe.py", Path("out")).count("--budget-epochs") == 1
 
 
+def test_the_wide_scaling_cell_changes_only_the_windows_width():
+    """The told plan's width probe: the window 64 wide, the factors 32 and the budget in proportion to p kept."""
+    changed = [(x, y) for x, y in zip(b.SCALING_CELL, b.SCALING_WIDE_CELL, strict=True) if x != y]
+    assert changed == [("32", "64")] and b.SCALING_WIDE_CELL[b.SCALING_WIDE_CELL.index("--window-width") + 1] == "64"
+    assert b.SCALING_WIDE_CELL[b.SCALING_WIDE_CELL.index("--factor-width") + 1] == "32"
+    (made,) = b.attempts("d23-family:600", ["scaling-wide"])
+    command = b.attempt_command(made, "py", "probe.py", Path("out"))
+    assert command[command.index("--budget-epochs") + 1] == "1058"
+    assert command[command.index("--window-width") + 1] == "64"
+
+
 def test_a_seed_may_name_its_words_seed_which_reaches_the_run_and_the_ledger_only_when_set():
     made = b.attempts("d13-family:303/300,d13-family:300", ["paper"])
     assert [(a.id, a.seed, a.data_seed) for a in made] == [

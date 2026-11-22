@@ -106,6 +106,14 @@ SCALING_CELL = [
     *PAPER_CELL[PAPER_CELL.index("--budget-epochs") + 2 :],
 ]
 
+# The told plan's width probe (after stage 3 broke at p 19 and certified nothing at 23): the window 64 wide, the
+# factors still 32, everything else the scaling cell's.
+SCALING_WIDE_CELL = [
+    *SCALING_CELL[: SCALING_CELL.index("--window-width") + 1],
+    "64",
+    *SCALING_CELL[SCALING_CELL.index("--window-width") + 2 :],
+]
+
 # The approximation claim's cell (`git show c201622:docs/approximation-claim-workplan.md`: two factors
 # of 16, reading the output, the default window, 400 epochs, stop at certified, no fork): T1 repeats its
 # sum arm beside the two controls, and T3's baselines compare with T1 and A1 (paper-workplan.md, D12).
@@ -130,6 +138,8 @@ CELLS: dict[str, Cell] = {
     "paper": Cell(tuple(PAPER_CELL)),
     # the told plan's stage 3 (D8): the paper's cell with its 600 epochs at p 13 in proportion to p, 46 a unit
     "scaling": Cell(tuple(SCALING_CELL), budget_per_p=46),
+    # the told plan's width probe (the owner, 2026-11-20): the scaling cell with only the window 64 wide
+    "scaling-wide": Cell(tuple(SCALING_WIDE_CELL), budget_per_p=46),
     "approximation": Cell(tuple(APPROXIMATION_CELL)),
     # T3's baselines: the approximation claim's cell with only the window (E6's) or the state (E2's) changed
     "approximation-linear": Cell((*APPROXIMATION_CELL, "--baseline", "linear")),
