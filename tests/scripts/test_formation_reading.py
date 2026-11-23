@@ -41,3 +41,22 @@ def test_a_batch_reads_each_attempt_on_its_backdrops_machine(tmp_path: Path) -> 
     lines = script.batch(tmp_path, script.rules(["2.5:0.9"]))
     assert lines[0] == "2 runs, 1 certified"
     assert lines[1] == "  2.5(d+k), share < 0.9: d23-family-600 at step 10, epoch 100 of 120, share 0.50"
+
+
+def test_a_path_with_its_attempts_prefix_reads_its_p() -> None:
+    assert script.survey_machine("/paper/t3/attempts/approximation-linear.d5-family-wide-300/")[1].states == 25
+
+
+def test_stages_read_each_cell_with_its_architecture(tmp_path: Path) -> None:
+    network = {
+        "layers": [{"kind": "embedding", "size": 32}] + [{"kind": "state_input"}, {"kind": "residual"}] * 3,
+        "recurrence": {"factors": [{"state_size": 32, "codes": {"count": 67}}] * 2},
+    }
+    for seed, certified in ((500, None), (501, 2)):
+        d = tmp_path / "told" / "attempts" / f"d23-family-{seed}"
+        write(d, [0.5, 1.0], certified_at=certified)
+        (d / "network.json").write_text(json.dumps(network))
+    runs = script.surveyed([tmp_path])
+    assert [(s.kind, s.states, s.arm, s.shape.load) for s in runs] == [("division", 529, "family", 4489 / 1024)] * 2
+    lines = script.stage_lines(runs, [2.0])
+    assert "division 529 family | 32 3 32x32 67x67 4.38 | 2 2 - 1" in lines
