@@ -113,6 +113,13 @@ SCALING_WIDE_CELL = [
     "64",
     *SCALING_CELL[SCALING_CELL.index("--window-width") + 2 :],
 ]
+# The told plan's codes probe (2026-11-23, after the width probe certified 3 of 4 at p 23): the scaling cell with
+# fewer codes, ceil(13/7 sqrt(q)) a factor (43 at p 23: load 1.81 against 32/11's 67 and 4.4), the window 32.
+SCALING_LEAN_CELL = [
+    *SCALING_CELL[: SCALING_CELL.index("--codes-ratio") + 1],
+    "13/7",
+    *SCALING_CELL[SCALING_CELL.index("--codes-ratio") + 2 :],
+]
 
 # The approximation claim's cell (`git show c201622:docs/approximation-claim-workplan.md`: two factors
 # of 16, reading the output, the default window, 400 epochs, stop at certified, no fork): T1 repeats its
@@ -140,6 +147,8 @@ CELLS: dict[str, Cell] = {
     "scaling": Cell(tuple(SCALING_CELL), budget_per_p=46),
     # the told plan's width probe (the owner, 2026-11-20): the scaling cell with only the window 64 wide
     "scaling-wide": Cell(tuple(SCALING_WIDE_CELL), budget_per_p=46),
+    # the told plan's codes probe (the owner, 2026-11-23): the scaling cell with only its codes ratio 13/7
+    "scaling-lean": Cell(tuple(SCALING_LEAN_CELL), budget_per_p=46),
     "approximation": Cell(tuple(APPROXIMATION_CELL)),
     # T3's baselines: the approximation claim's cell with only the window (E6's) or the state (E2's) changed
     "approximation-linear": Cell((*APPROXIMATION_CELL, "--baseline", "linear")),

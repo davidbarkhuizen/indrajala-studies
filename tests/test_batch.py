@@ -131,6 +131,23 @@ def test_the_wide_scaling_cell_changes_only_the_windows_width():
     assert command[command.index("--window-width") + 1] == "64"
 
 
+def test_the_lean_scaling_cell_changes_only_the_codes_ratio():
+    """The told plan's codes probe: 43 codes a factor at p 23 (load 1.81), the window and budget kept."""
+    from fractions import Fraction
+
+    from indrajala_studies import modular_family as mf
+
+    changed = [(x, y) for x, y in zip(b.SCALING_CELL, b.SCALING_LEAN_CELL, strict=True) if x != y]
+    assert changed == [("32/11", "13/7")]
+    assert mf.scaled_factors(23 * 23, Fraction(13, 7), 2, 32) == [(32, 43), (32, 43)]
+    (made,) = b.attempts("d23-family:500", ["scaling-lean"])
+    command = b.attempt_command(made, "py", "probe.py", Path("out"))
+    assert command[command.index("--budget-epochs") + 1] == "1058"
+    assert (
+        command[command.index("--codes-ratio") + 1] == "13/7" and command[command.index("--window-width") + 1] == "32"
+    )
+
+
 def test_a_seed_may_name_its_words_seed_which_reaches_the_run_and_the_ledger_only_when_set():
     made = b.attempts("d13-family:303/300,d13-family:300", ["paper"])
     assert [(a.id, a.seed, a.data_seed) for a in made] == [
