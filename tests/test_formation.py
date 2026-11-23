@@ -61,3 +61,51 @@ def test_unformed_later_counts_the_runs_not_formed_by_the_point() -> None:
         run("d", [0.5] * 5),
     ]
     assert fm.unformed_later(runs, 2.5) == (1, 2)  # c formed before step 10, d ended before it
+
+
+def test_a_step_end_carries_its_machine_and_a_run_its_stages() -> None:
+    rows = [
+        {"step": 1, "end": "passed", "epochs": 5, "state_share": 0.6, "certified": False},
+        {
+            "step": 2,
+            "end": "passed",
+            "epochs": 5,
+            "state_share": 1.0,
+            "certified": False,
+            "machine": {"codes": 10, "pairs": 30, "right": 0},
+        },
+        {
+            "step": 3,
+            "end": "passed",
+            "epochs": 5,
+            "state_share": 1.0,
+            "certified": True,
+            "machine": {"codes": 25, "pairs": 25, "right": 25},
+        },
+    ]
+    ends = fm.step_ends(rows)
+    assert ends[0].codes is None and ends[1].states_per_code == 3.0 and ends[2].separated
+    assert ends[1].formed and not ends[1].separated
+    r = fm.Run("r", ends, 4)
+    assert not r.traced and (fm.formed_step(r), fm.separated_step(r), fm.certified_step(r)) == (2, 3, 3)
+    assert fm.stages([r, run("never", [0.2] * 3)]) == fm.Stages(2, 1, 1, 1)
+
+
+def test_a_signal_counts_the_alive_runs_it_flags_and_those_certified_later() -> None:
+    late = run("late", [0.5] * 10 + [1.0], certified_at=11)
+    never = run("never", [0.95] * 12)
+    early = run("early", [1.0] * 3, certified_at=2)
+    assert fm.flagged_later([late, never, early], 2.5, lambda e: e.share < 0.9) == (1, 1)
+    assert fm.flagged_later([late, never, early], 2.5, lambda e: e.share < fm.FULL) == (1, 2)
+
+
+def test_an_architecture_reads_the_window_width_blocks_and_codes() -> None:
+    network = {
+        "layers": [{"kind": "embedding", "size": 32}, {"kind": "position"}]
+        + [{"kind": "state_input"}, {"kind": "residual"}, {"kind": "residual"}] * 3,
+        "recurrence": {"factors": [{"state_size": 32, "codes": {"count": 67}}] * 2},
+    }
+    a = fm.architecture(network)
+    assert a == fm.Architecture(32, 3, (32, 32), (67, 67))
+    assert a is not None and a.joint_codes == 4489 and a.load == pytest.approx(4489 / 1024)
+    assert fm.architecture({"layers": network["layers"], "recurrence": {"factors": []}}) is None
