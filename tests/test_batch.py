@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import datetime
 import json
 import os
@@ -343,15 +344,20 @@ def test_a_worker_refuses_a_connection_to_itself_and_tries_again(tmp_path: Path,
         asyncio.run(worker(tmp_path, "w", 1).session(port))
 
 
+# stone's hours before the owner lifted them (2026-11-16): weekday nights and all weekend
+WINDOWED = dataclasses.replace(
+    b.HOSTS["stone"], windows=(b.Window(b.WEEKDAYS, 18, 13), b.Window((5,), 0, 24), b.Window((6,), 0, 31))
+)
+
+
 def test_a_hosts_window_reads_its_hours_left_and_is_none_outside_them():
     thursday_night = datetime.datetime(2026, 10, 22, 20, 0, tzinfo=SAST)  # a Thursday
-    assert b.window_left(b.HOSTS["stone"], thursday_night) == 11 * 3600  # weekday nights to 07:00
-    assert (
-        b.window_left(b.HOSTS["stone"], datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)) is None
-    )  # the owner's day
-    assert b.window_left(b.HOSTS["stone"], datetime.datetime(2026, 10, 24, 10, 0, tzinfo=SAST)) == 14 * 3600  # Saturday
+    assert b.window_left(WINDOWED, thursday_night) == 11 * 3600  # weekday nights to 07:00
+    assert b.window_left(WINDOWED, datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)) is None  # the owner's day
+    assert b.window_left(WINDOWED, datetime.datetime(2026, 10, 24, 10, 0, tzinfo=SAST)) == 14 * 3600  # Saturday
     assert b.window_left(b.HOSTS["jebel"], thursday_night) is not None  # on grid power: around the clock
     assert b.window_left(b.HOSTS["klip"], thursday_night) == float("inf")
+    assert b.window_left(b.HOSTS["stone"], thursday_night) == float("inf")  # any hour since 2026-11-16
 
 
 def test_a_worker_on_another_commit_is_refused_and_given_nothing(tmp_path: Path):
@@ -739,11 +745,11 @@ def test_t11s_cells_meet_their_registered_bounds():
 
 
 def test_an_opened_host_takes_work_outside_its_hours():
-    thursday_noon = datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)  # stone's owner's day
-    assert b.window_left(b.HOSTS["stone"], thursday_noon) is None
-    opened = b.opened({"stone": b.HOSTS["stone"], "klip": b.HOSTS["klip"]}, ["stone"])
+    thursday_noon = datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)  # the windowed host's owner's day
+    assert b.window_left(WINDOWED, thursday_noon) is None
+    opened = b.opened({"stone": WINDOWED, "klip": b.HOSTS["klip"]}, ["stone"])
     assert b.window_left(opened["stone"], thursday_noon) is not None and opened["klip"] == b.HOSTS["klip"]
-    assert b.HOSTS["stone"].windows  # the table itself unchanged
+    assert WINDOWED.windows  # the table itself unchanged
 
 
 def test_a_tagged_batch_runs_in_its_own_worktree_and_root():
