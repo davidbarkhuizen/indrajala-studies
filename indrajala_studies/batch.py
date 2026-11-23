@@ -297,7 +297,8 @@ CRATE = "crate-edce2de"
 # klip all its cores (the owner: "klip always on, all cores", <= 85 C under the thermal guard; about
 # 220 MB a paper-cell run, 7 runs about 1.5 GB), pyramidon 3 beside development. stone at 60% (the owner,
 # 2026-11-16, until further notice: 7 of its 12 threads, 6 slots and the worker's; 70% and 7 slots from
-# 2026-11-10; the owner's grant of hours outside its windows is `controller --open stone`), its python its ml clone's venv (the
+# 2026-11-10), at any hour (the owner, 2026-11-16: its weekday-night and weekend windows lifted, granted till
+# then by `controller --open stone`), its python its ml clone's venv (the
 # wt-branches worktree, whose venv it used, was removed 2026-11-14).
 # The worktree is wt-studies: each host's wt-batch is a worktree of its ml clone from before the separation.
 HOSTS: dict[str, Host] = {
@@ -336,7 +337,6 @@ HOSTS: dict[str, Host] = {
         "/home/david/labour/batch-attempts",
         pythonpath=f"/home/david/labour/{CRATE}",
         setup="source ~/labour/env.sh",
-        windows=(Window(WEEKDAYS, 18, 13), Window((5,), 0, 24), Window((6,), 0, 31)),
     ),
 }
 
